@@ -25,10 +25,13 @@ from flask import (
 
 from . import security, stats
 from .catalog import (
+    ADDICTION_TIERS,
     FLAVOR_TYPES,
+    MAX_DC,
     MAX_NOTES_LENGTH,
     MAX_SOUL_COINS,
-    NPCS,
+    MAX_WEIGHT_GRAMS,
+    MIN_DC,
     POINTS_BRAND,
     POINTS_FLAVOR,
     SCALE_KEYS,
@@ -198,15 +201,13 @@ def _parse_rating(form):
             scores[key] = int(value)
         else:
             errors.append(f"{SCALE_LABELS[key]} fehlt.")
-    enjoyment = form.get("enjoyment", "")
-    if enjoyment.isdigit() and 1 <= int(enjoyment) <= 20:
-        enjoyment = int(enjoyment)
+    dc = form.get("dc", "")
+    if dc.isdigit() and MIN_DC <= int(dc) <= MAX_DC:
+        dc = int(dc)
     else:
-        enjoyment = None
-        errors.append("Der Genuss-Wurf fehlt.")
+        dc = None
+        errors.append("Der Sucht-Save fehlt.")
 
-    npc = form.get("npc", "")
-    npc = npc if npc in NPCS else None
     flavor = form.get("guess_flavor", "")
     flavor = flavor if flavor in FLAVOR_TYPES else None
     coins = form.get("coins", "")
@@ -215,8 +216,7 @@ def _parse_rating(form):
 
     rating = {
         "scores": scores,
-        "enjoyment": enjoyment,
-        "npc": npc,
+        "dc": dc,
         "guess_flavor": flavor,
         "guess_brand": form.get("guess_brand", "").strip()[:MAX_FIELD_LENGTH],
         "coins": coins,
@@ -246,6 +246,7 @@ def rate(chip_id):
         if own_chip:
             submitted["guess_flavor"] = None
             submitted["guess_brand"] = ""
+            submitted["coins"] = None
         if not errors:
             with store().edit() as data:
                 if data["phase"] != "tasting":
@@ -264,7 +265,9 @@ def rate(chip_id):
         own_chip=own_chip,
         rating=rating or {"scores": {}},
         sections=SECTIONS,
-        npcs=NPCS,
+        tiers=ADDICTION_TIERS,
+        min_dc=MIN_DC,
+        max_dc=MAX_DC,
         flavors=FLAVOR_TYPES,
         max_coins=MAX_SOUL_COINS,
         max_notes=MAX_NOTES_LENGTH,
@@ -291,7 +294,7 @@ def _ceremony_payload(tasting):
                     "bowl": chip["bowl"],
                     "label": chip["label"],
                     "flavor_type": chip["flavor_type"],
-                    "enjoyment": chip["enjoyment"],
+                    "dc": chip["dc"],
                     "place": len(order) - index,
                 })
     return {
@@ -406,11 +409,22 @@ def _parse_chip(form):
         if not (0 <= price <= 1000):
             errors.append("Der Preis ergibt keinen Sinn.")
             price = None
+    weight = None
+    raw_weight = form.get("weight", "").strip().replace(",", ".")
+    if raw_weight:
+        try:
+            weight = float(raw_weight)
+        except ValueError:
+            weight = -1.0
+        if not (1 <= weight <= MAX_WEIGHT_GRAMS):
+            errors.append("Das Gewicht ergibt keinen Sinn.")
+            weight = None
     return {
         "name": name,
         "brand": brand,
         "flavor_type": flavor,
         "price": price,
+        "weight": weight,
         "own_brand": form.get("own_brand") == "on",
     }, errors
 
@@ -658,21 +672,21 @@ def admin_export_csv():
     out = io.StringIO()
     writer = csv.writer(out, delimiter=";")
     writer.writerow(
-        ["schale", "chips", "marke", "geschmack", "eigenmarke", "preis", "mitgebracht_von", "wer", "genuss_d20"]
+        ["schale", "chips", "marke", "geschmack", "eigenmarke", "preis", "gewicht_g", "preis_100g", "mitgebracht_von", "wer", "sucht_dc"]
         + SCALE_KEYS
-        + ["npc", "seelenmuenzen", "vertrag", "tipp_geschmack", "tipp_marke", "orakelpunkte", "notizen"]
+        + ["preis_schaetzung_muenzen", "vertrag", "tipp_geschmack", "tipp_marke", "orakelpunkte", "notizen"]
     )
     for chip in sorted(tasting["chips"], key=lambda c: c["bowl"]):
         for pid, r in tasting["ratings"].get(chip["id"], {}).items():
             row = [
                 chip["bowl"], chip["name"], chip.get("brand"), chip.get("flavor_type"),
-                bool(chip.get("own_brand")), chip.get("price"),
+                bool(chip.get("own_brand")), chip.get("price"), chip.get("weight"), stats.price_per_100g(chip),
                 users.get(chip.get("added_by"), {}).get("name", ""),
-                users.get(pid, {}).get("name", pid), r["enjoyment"],
+                users.get(pid, {}).get("name", pid), r["dc"],
             ]
             row += [r["scores"].get(k) for k in SCALE_KEYS]
             row += [
-                r.get("npc"), r.get("coins"), r.get("contract"), r.get("guess_flavor"),
+                r.get("coins"), r.get("contract"), r.get("guess_flavor"),
                 r.get("guess_brand"), stats.guess_points(r, chip, pid), r.get("notes"),
             ]
             writer.writerow([_csv_safe(cell) for cell in row])

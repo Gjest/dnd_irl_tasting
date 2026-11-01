@@ -12,7 +12,7 @@
 {% endif %}
 
 <form method="post" id="rate-form" class="rate-form"
-      data-draft-key="draft:{{ user.id }}:{{ chip_id }}" data-has-saved="{{ '1' if rating.enjoyment else '0' }}">
+      data-draft-key="draft:{{ user.id }}:{{ chip_id }}" data-has-saved="{{ '1' if rating.dc else '0' }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
   {% for section in sections %}
@@ -21,6 +21,7 @@
     {% for r in section.ratings %}
     <fieldset class="scale">
       <legend>{{ r.label }}</legend>
+      {% if r.hint %}<p class="scale-hint">{{ r.hint }}</p>{% endif %}
       <div class="scale-options">
         {% for n in range(1, 6) %}
         <label>
@@ -37,19 +38,20 @@
   {% endfor %}
 
   <section class="rate-section rate-verdict">
-    <h2>Der Genuss-Wurf <small>d20</small></h2>
-    <p class="hint">Dein persönliches Urteil und die Grundlage der Rangliste. 1 ist ein kritischer Patzer, 20 ein kritischer Treffer.</p>
-    <fieldset class="d20">
-      <legend class="sr-only">Genuss von 1 bis 20</legend>
-      <div class="d20-grid">
-        {% for n in range(1, 21) %}
-        <label class="{% if n == 1 %}nat1{% elif n == 20 %}nat20{% endif %}">
-          <input type="radio" name="enjoyment" value="{{ n }}" required {% if rating.enjoyment == n %}checked{% endif %}>
-          <span>{{ n }}</span>
-        </label>
-        {% endfor %}
-      </div>
-    </fieldset>
+    <h2>Der Sucht-Save <small>DC {{ min_dc }} bis {{ max_dc }}</small></h2>
+    <p class="hint">Wie schwer ist es, die Hand aus der Schale zu nehmen? Dreh den Würfel auf deinen DC. Daraus entsteht die Rangliste.</p>
+    <div id="die" class="die" data-tiers="{{ tiers|tojson|forceescape }}">
+      <button type="button" id="die-down" class="die-step" aria-label="DC senken">−</button>
+      <svg id="die-body" class="die-body" viewBox="-100 -100 200 200" role="slider" tabindex="0"
+           aria-label="Sucht-Save DC" aria-valuemin="{{ min_dc }}" aria-valuemax="{{ max_dc }}"></svg>
+      <button type="button" id="die-up" class="die-step" aria-label="DC erhöhen">+</button>
+    </div>
+    <input type="number" id="die-value" class="die-value" name="dc" min="{{ min_dc }}" max="{{ max_dc }}" required tabindex="-1"
+           aria-hidden="true" value="{{ rating.dc or '' }}">
+    <p class="die-readout" aria-live="polite">
+      <strong id="die-title">Dreh den Würfel</strong>
+      <span id="die-line">Wischen dreht ihn. Antippen wählt die Zahl vorne. Die Knöpfe gehen eine Zahl weiter.</span>
+    </p>
   </section>
 
   {% if not own_chip %}
@@ -69,29 +71,20 @@
       <input type="text" name="guess_brand" maxlength="80" autocomplete="off" value="{{ rating.guess_brand or '' }}"
              placeholder="z. B. eine Marke oder Eigenmarke">
     </label>
+    <label class="field">
+      <span>Wie teuer wirkt diese Schale? <em>Seelenmünzen, für die Preis-Statistik</em></span>
+      <select name="coins">
+        <option value="">Keine Schätzung</option>
+        {% for n in range(0, max_coins + 1) %}
+        <option value="{{ n }}" {% if rating.coins == n %}selected{% endif %}>{{ n }}{% if n == 0 %} (Ramsch aus dem Styx){% elif n == max_coins %} (Hofstaat von Asmodeus){% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
   </section>
   {% endif %}
 
   <section class="rate-section">
     <h2>Der Pakt <small>Freiwillig</small></h2>
-    <label class="field">
-      <span>Welcher NPC wäre diese Schale?</span>
-      <select name="npc">
-        <option value="">Niemand</option>
-        {% for npc in npcs %}
-        <option {% if rating.npc == npc %}selected{% endif %}>{{ npc }}</option>
-        {% endfor %}
-      </select>
-    </label>
-    <label class="field">
-      <span>Wie viele Seelenmünzen für eine Tüte? (0 bis {{ max_coins }})</span>
-      <select name="coins">
-        <option value="">Kein Angebot</option>
-        {% for n in range(0, max_coins + 1) %}
-        <option value="{{ n }}" {% if rating.coins == n %}selected{% endif %}>{{ n }}</option>
-        {% endfor %}
-      </select>
-    </label>
     <fieldset class="contract">
       <legend>Höllenvertrag: ein Jahr lang nur diese Chips?</legend>
       <label class="check"><input type="radio" name="contract" value="yes" {% if rating.contract is sameas true %}checked{% endif %}> Unterschreiben</label>
@@ -111,4 +104,5 @@
 
 <div id="crit" class="crit" hidden aria-live="assertive"><strong id="crit-text"></strong></div>
 {% endblock %}
-{% block scripts %}<script src="{{ url_for('static', filename='js/rate.js') }}"></script>{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/die.js') }}"></script>
+<script src="{{ url_for('static', filename='js/rate.js') }}"></script>{% endblock %}

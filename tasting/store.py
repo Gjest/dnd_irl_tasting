@@ -32,6 +32,15 @@ def _empty_tasting():
     }
 
 
+def _upgrade(tasting):
+    # Ratings from before the Sucht-Save stored their d20 value as "enjoyment".
+    for ratings in tasting["ratings"].values():
+        for rating in ratings.values():
+            if "enjoyment" in rating:
+                rating["dc"] = rating.pop("enjoyment")
+    return tasting
+
+
 def write_json_atomic(path, data, private=False):
     path = Path(path)
     tmp = path.with_name(path.name + ".tmp")
@@ -56,7 +65,7 @@ class Store:
         # A corrupt file raises here on purpose: better to refuse to start than
         # to silently overwrite ratings with an empty tasting.
         if self.tasting_path.exists():
-            self._tasting = json.loads(self.tasting_path.read_text(encoding="utf-8"))
+            self._tasting = _upgrade(json.loads(self.tasting_path.read_text(encoding="utf-8")))
         else:
             self._tasting = _empty_tasting()
             write_json_atomic(self.tasting_path, self._tasting)

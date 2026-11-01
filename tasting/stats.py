@@ -3,13 +3,26 @@
 import difflib
 import math
 import re
-from collections import Counter
 from statistics import mean, pstdev
 
-from .catalog import NPCS, POINTS_BRAND, POINTS_FLAVOR, SCALE_KEYS, SCALE_SHORT
+from .catalog import (
+    ADDICTION_TIERS,
+    ALIGNMENTS,
+    ATTRIBUTES,
+    CONDITIONS,
+    POINTS_BRAND,
+    POINTS_FLAVOR,
+    PRICE_ADDICTION_VERDICTS,
+    PRICE_GUESS_VERDICTS,
+    SCALE_KEYS,
+    SCALE_SHORT,
+)
 
 MIN_SHARED_FOR_CORRELATION = 3
 EPSILON = 1e-9
+# How far an axis score must leave the middle to count as lawful/chaotic or good/evil.
+ALIGNMENT_THRESHOLD = 0.12
+PRICE_READ_BAR = 0.3
 
 
 def de(value, digits=1):
@@ -62,14 +75,73 @@ def pearson(xs, ys):
     return sum(a * b for a, b in zip(dx, dy)) / denominator
 
 
+def price_per_100g(chip):
+    if chip.get("price") is None or not chip.get("weight"):
+        return None
+    return chip["price"] / chip["weight"] * 100
+
+
+def addiction_tier(dc):
+    """The status effect of a DC. A group average can sit between whole numbers."""
+    current = ADDICTION_TIERS[0]
+    for tier in ADDICTION_TIERS:
+        if dc >= tier["from"]:
+            current = tier
+    return {"name": current["name"], "line": current["line"]}
+
+
+def _verdict(verdicts, r):
+    return next(v["line"] for v in verdicts if r >= v["from"])
+
+
+def _alignment(law, good):
+    """Turns two axis scores (positive is lawful, positive is good) into a D&D alignment."""
+    def side(value, positive, negative):
+        if value >= ALIGNMENT_THRESHOLD:
+            return positive
+        return negative if value <= -ALIGNMENT_THRESHOLD else "neutral"
+
+    key = (side(law, "lawful", "chaotic"), side(good, "good", "evil"))
+    return {"law": key[0], "good": key[1], **ALIGNMENTS[key]}
+
+
+def _chip_alignment(chip):
+    def scale(key):
+        return (chip["scales"][key] - 3) / 2
+
+    # A group that agrees on a chip is order; a chip that splits the table is chaos.
+    discord = (chip["spread"] - 4) / 4 if chip["spread"] is not None else 0
+    law = mean([scale("integrity"), scale("harmony"), -scale("coverage"), -discord])
+    good = mean([scale("potato"), scale("harmony"), -scale("artificial"), -scale("heat"), -scale("thirst")])
+    return _alignment(law, good)
+
+
+def _character_sheet(chip):
+    sheet = []
+    for attribute in ATTRIBUTES:
+        values = [chip["scales"][k] for k in attribute["for"]] + [6 - chip["scales"][k] for k in attribute["against"]]
+        # Scales run from 1 to 5, D&D attributes from 3 to 18.
+        score = round(3 + (mean(values) - 1) * 15 / 4)
+        sheet.append({"label": attribute["label"], "name": attribute["name"], "score": score, "modifier": (score - 10) // 2})
+    return sheet
+
+
+def _conditions(chip):
+    found = []
+    for condition in CONDITIONS:
+        value = chip["scales"][condition["scale"]]
+        if value >= condition.get("min", math.inf) or value <= condition.get("max", -math.inf):
+            found.append({"name": condition["name"], "line": condition["line"]})
+    return found
+
+
 def _chip_stats(chip, ratings):
-    enjoyment = [r["enjoyment"] for r in ratings.values()]
+    dc = [r["dc"] for r in ratings.values()]
     scales = {
         key: mean(r["scores"][key] for r in ratings.values()) if ratings else None
         for key in SCALE_KEYS
     }
     coins = [r["coins"] for r in ratings.values() if r.get("coins") is not None]
-    npcs = Counter(r["npc"] for r in ratings.values() if r.get("npc"))
     return {
         "id": chip["id"],
         "bowl": chip["bowl"],
@@ -79,18 +151,19 @@ def _chip_stats(chip, ratings):
         "flavor_type": chip.get("flavor_type", ""),
         "own_brand": bool(chip.get("own_brand")),
         "price": chip.get("price"),
+        "weight": chip.get("weight"),
+        "price_100g": price_per_100g(chip),
         "raters": len(ratings),
-        "enjoyment": mean(enjoyment) if enjoyment else None,
-        "spread": pstdev(enjoyment) if len(enjoyment) >= 2 else None,
+        "dc": mean(dc) if dc else None,
+        "spread": pstdev(dc) if len(dc) >= 2 else None,
         "scales": scales,
         "coins": mean(coins) if coins else None,
         "contracts": sum(1 for r in ratings.values() if r.get("contract") is True),
-        "npc": [{"name": n, "votes": npcs[n]} for n in NPCS if npcs[n]],
     }
 
 
 def rank_key(stat):
-    return (-stat["enjoyment"], -stat["scales"]["harmony"], stat["label"])
+    return (-stat["dc"], -stat["scales"]["harmony"], stat["label"])
 
 
 def ranked_chip_ids(tasting):
@@ -113,9 +186,9 @@ def _winners(items, value, best):
     return [i for i, v in candidates if abs(v - top) < EPSILON], top
 
 
-def _player_awards(players, per_player, guessing):
+def _player_awards(players, per_player, guessing, price_reads):
     def score_mean(pid):
-        values = per_player[pid]["enjoyment"]
+        values = per_player[pid]["dc"]
         return mean(values) if values else None
 
     def deviation(pid):
@@ -131,11 +204,20 @@ def _player_awards(players, per_player, guessing):
     def guess(pid):
         return guessing.get(pid) or None
 
+    # Only a real hit or a real miss earns these, not the best of a mediocre table.
+    def good_price_read(pid):
+        r = price_reads.get(pid)
+        return r if r is not None and r >= PRICE_READ_BAR else None
+
+    def bad_price_read(pid):
+        r = price_reads.get(pid)
+        return r if r is not None and r < PRICE_READ_BAR else None
+
     definitions = [
         ("arkhan", "Arkhan der Grausame", "Der härteste Kritiker am Tisch. Selbst Tiamat wäre ihm zu lasch.",
-         score_mean, min, lambda v: f"Ø Genuss {de(v)} / 20"),
+         score_mean, min, lambda v: f"Ø Sucht-DC {de(v)}"),
         ("lulu", "Lulus Herz", "Findet in jedem Krümel das Gute. Die Hölle hat keine Macht über dieses Gemüt.",
-         score_mean, max, lambda v: f"Ø Genuss {de(v)} / 20"),
+         score_mean, max, lambda v: f"Ø Sucht-DC {de(v)}"),
         ("thavius", "Thavius der Ketzer", "Predigt gegen jede Mehrheit und verkauft der Gruppe das Gegenteil.",
          deviation, max, lambda v: f"Ø {de(v)} Punkte von der Gruppe entfernt"),
         ("hellriders", "Stimme der Höllenreiter", "Reitet immer mit der Truppe. Geschmack im Gleichschritt.",
@@ -144,8 +226,12 @@ def _player_awards(players, per_player, guessing):
          guess, max, lambda v: f"{v} Orakelpunkte"),
         ("bard", "Barde der Neun Höllen", "Hat mehr geschrieben als gekaut.",
          poet, max, lambda v: f"{v} Zeichen Notizen"),
-        ("fate", "Vom Schicksal gezeichnet", "Kennt keine Mitte: Für diese Person gibt es nur Triumph oder Untergang.",
-         fate, max, lambda v: f"{v} × Nat 1 oder Nat 20"),
+        ("fate", "Vom Schicksal gezeichnet", "Kennt keine Mitte: Für diese Person gibt es nur Immunität oder Unterwerfung.",
+         fate, max, lambda v: f"{v} × DC 1 oder DC 20"),
+        ("accountant", "Asmodeus' Buchhalter", "Riecht den Preis pro 100 Gramm durch die Schale. Die Hölle stellt ein.",
+         good_price_read, max, lambda v: f"Korrelation {de(v, 2)} mit dem echten Preis"),
+        ("mammon", "Von Mammon betrogen", "Hält Ramsch für Gold und Gold für Ramsch. Bitte hier unterschreiben.",
+         bad_price_read, min, lambda v: f"Korrelation {de(v, 2)} mit dem echten Preis"),
     ]
     awards = []
     for key, title, line, value, best, stat in definitions:
@@ -162,9 +248,15 @@ def _chip_awards(chips):
     rated = [c for c in chips if c["raters"]]
 
     def bargain(c):
-        if c["price"] and c["enjoyment"] is not None:
-            return c["enjoyment"] / c["price"]
+        if c["price_100g"] and c["dc"] is not None:
+            return c["dc"] / c["price_100g"]
         return None
+
+    def conditions(c):
+        return len(c["conditions"]) or None
+
+    def price_gap(c):
+        return c["price_gap"]
 
     def contracts(c):
         return c["contracts"] or None
@@ -174,7 +266,7 @@ def _chip_awards(chips):
 
     definitions = [
         ("crown", "Krone von Avernus", "Der unangefochtene Herrscher über alle Schalen.",
-         lambda c: c["enjoyment"], max, lambda v: f"Ø Genuss {de(v)} / 20", 1),
+         lambda c: c["dc"], max, lambda v: f"Ø Sucht-DC {de(v)}", 1),
         ("zariel", "Zariels Zorn", "Brennt länger als der Blutkrieg.",
          scale("heat"), max, lambda v: f"Ø Höllenfeuer {de(v)} / 5", 1),
         ("stealth", "Patzer beim Heimlichkeitswurf", "Die ganze Stadt Elturel weiß jetzt, wo ihr seid.",
@@ -183,12 +275,18 @@ def _chip_awards(chips):
          scale("grease"), max, lambda v: f"Ø Styx-Faktor {de(v)} / 5", 1),
         ("bloodwar", "Der Blutkrieg", "Spaltet die Gruppe wie Teufel und Dämonen.",
          lambda c: c["spread"], max, lambda v: f"Standardabweichung {de(v)} Punkte", 1),
-        ("bargain", "Seelenmünzen-Schnäppchen", "So viel Genuss für so wenig Gold. Verdächtig.",
-         bargain, max, lambda v: f"{de(v)} Genusspunkte pro Euro", 1),
+        ("bargain", "Seelenmünzen-Schnäppchen", "So viel Sucht für so wenig Gold. Verdächtig.",
+         bargain, max, lambda v: f"{de(v)} DC pro Euro je 100 g", 1),
+        ("conditions", "Wandelnde Zustandsliste", "Wer das isst, braucht einen Kleriker und eine zweite Spielleitung.",
+         conditions, max, lambda v: f"{v} Zustände", 1),
+        ("impostor", "Thavius' Mogelpackung", "Wirkt wie Hofstaat, kostet wie Ramsch. Predigen kann sie.",
+         price_gap, max, lambda v: f"Überschätzt um {de(v)} Standardabweichungen", 1),
+        ("hidden_gem", "Der verkannte Schatz", "Sieht billig aus, ist es aber nicht. Ein Mimik unter den Chips.",
+         price_gap, min, lambda v: f"Unterschätzt um {de(abs(v))} Standardabweichungen", 1),
         ("contract", "Der unterschriebene Vertrag", "Ein Jahr lang nur diese Chips. Die Unterschriften sind blutig, aber gültig.",
          contracts, max, lambda v: f"{v} × unterschrieben", 1),
         ("elturel", "Der Fall von Elturel", "Auch diese Chips stürzten in die Hölle. Niemand hat sie aufgefangen.",
-         lambda c: c["enjoyment"], min, lambda v: f"Ø Genuss {de(v)} / 20", 2),
+         lambda c: c["dc"], min, lambda v: f"Ø Sucht-DC {de(v)}", 2),
     ]
     awards = []
     for key, title, line, value, best, stat, min_chips in definitions:
@@ -203,11 +301,79 @@ def _chip_awards(chips):
     return awards
 
 
+def _price_stats(chips, players, all_ratings):
+    """How well blind coin guesses and addiction line up with the real price per 100 g."""
+    known = [c for c in chips if c["price_100g"] is not None]
+    guessed = [c for c in known if c["coins"] is not None]
+    addictive = [c for c in known if c["dc"] is not None]
+
+    guess_r = dc_r = None
+    if len(guessed) >= MIN_SHARED_FOR_CORRELATION:
+        coins = [c["coins"] for c in guessed]
+        prices = [c["price_100g"] for c in guessed]
+        guess_r = pearson(coins, prices)
+        if pstdev(coins) > EPSILON and pstdev(prices) > EPSILON:
+            for chip in guessed:
+                # Coins and euros have no common unit, so both become "how far from typical".
+                chip["price_gap"] = (chip["coins"] - mean(coins)) / pstdev(coins) - (chip["price_100g"] - mean(prices)) / pstdev(prices)
+    if len(addictive) >= MIN_SHARED_FOR_CORRELATION:
+        dc_r = pearson([c["dc"] for c in addictive], [c["price_100g"] for c in addictive])
+
+    readers = []
+    reads = {}
+    for player in players:
+        pairs = [
+            (rating["coins"], chip["price_100g"])
+            for chip in known
+            for rating in [all_ratings.get(chip["id"], {}).get(player["id"])]
+            if rating and rating.get("coins") is not None
+        ]
+        if len(pairs) >= MIN_SHARED_FOR_CORRELATION:
+            r = pearson([a for a, _ in pairs], [b for _, b in pairs])
+            if r is not None:
+                reads[player["id"]] = r
+                readers.append({"name": player["name"], "r": r, "chips": len(pairs)})
+    readers.sort(key=lambda row: (-row["r"], row["name"]))
+
+    return reads, {
+        "guess_r": guess_r,
+        "guess_verdict": _verdict(PRICE_GUESS_VERDICTS, guess_r) if guess_r is not None else None,
+        "dc_r": dc_r,
+        "dc_verdict": _verdict(PRICE_ADDICTION_VERDICTS, dc_r) if dc_r is not None else None,
+        "readers": readers,
+        "min_chips": MIN_SHARED_FOR_CORRELATION,
+    }
+
+
+def _player_alignments(players, per_player, all_ratings):
+    rows = []
+    active = [p for p in players if per_player[p["id"]]["dc"]]
+    if not active:
+        return rows
+    group_dc = mean(mean(per_player[p["id"]]["dc"]) for p in active)
+    deviations = [mean(per_player[p["id"]]["deviations"]) for p in active if per_player[p["id"]]["deviations"]]
+    group_deviation = mean(deviations) if deviations else 0
+    for player in active:
+        entry = per_player[player["id"]]
+        signed = sum(
+            1 for ratings in all_ratings.values()
+            if ratings.get(player["id"], {}).get("contract") is True
+        )
+        # Generous is good, signing hell contracts is not.
+        good = (mean(entry["dc"]) - group_dc) / 5 - 0.5 * signed / len(entry["dc"])
+        # Going with the table is lawful, going against it is chaotic.
+        law = 0.0
+        if entry["deviations"] and group_deviation > EPSILON:
+            law = (group_deviation - mean(entry["deviations"])) / max(group_deviation, 1)
+        rows.append({"name": player["name"], "alignment": _alignment(law, good)})
+    return rows
+
+
 def _battle(chips, group_of, min_groups=2):
     groups = {}
     for chip in chips:
-        if chip["enjoyment"] is not None and group_of(chip):
-            groups.setdefault(group_of(chip), []).append(chip["enjoyment"])
+        if chip["dc"] is not None and group_of(chip):
+            groups.setdefault(group_of(chip), []).append(chip["dc"])
     rows = [
         {"label": label, "value": mean(values), "chips": len(values)}
         for label, values in groups.items()
@@ -230,12 +396,19 @@ def compute(tasting, users):
     names = {uid: u["name"] for uid, u in users.items()}
 
     chips = [_chip_stats(c, all_ratings.get(c["id"], {})) for c in chips_raw]
-    chips.sort(key=lambda c: (c["enjoyment"] is None, rank_key(c) if c["enjoyment"] is not None else ()))
+    for chip in chips:
+        chip["price_gap"] = None
+        rated = chip["dc"] is not None
+        chip["tier"] = addiction_tier(chip["dc"]) if rated else None
+        chip["alignment"] = _chip_alignment(chip) if rated else None
+        chip["sheet"] = _character_sheet(chip) if rated else []
+        chip["conditions"] = _conditions(chip) if rated else []
+    chips.sort(key=lambda c: (c["dc"] is None, rank_key(c) if c["dc"] is not None else ()))
     for position, chip in enumerate(chips, start=1):
-        chip["rank"] = position if chip["enjoyment"] is not None else None
+        chip["rank"] = position if chip["dc"] is not None else None
 
     per_player = {
-        p["id"]: {"enjoyment": [], "deviations": [], "crits": 0, "note_chars": 0, "best": None, "worst": None}
+        p["id"]: {"dc": [], "deviations": [], "crits": 0, "note_chars": 0, "best": None, "worst": None}
         for p in players
     }
     by_id = {c["id"]: c for c in chips_raw}
@@ -251,13 +424,13 @@ def compute(tasting, users):
         for pid, rating in ratings.items():
             if pid in known:
                 entry = per_player[pid]
-                value = rating["enjoyment"]
-                entry["enjoyment"].append(value)
+                value = rating["dc"]
+                entry["dc"].append(value)
                 scores_by_player[pid][chip_id] = value
                 if value in (1, 20):
                     entry["crits"] += 1
                 entry["note_chars"] += len(rating.get("notes") or "")
-                others = [r["enjoyment"] for other, r in ratings.items() if other != pid]
+                others = [r["dc"] for other, r in ratings.items() if other != pid]
                 if others:
                     entry["deviations"].append(abs(value - mean(others)))
                 if entry["best"] is None or value > entry["best"]["value"]:
@@ -274,7 +447,7 @@ def compute(tasting, users):
                     "chip": chip_label(chip),
                     "bowl": chip["bowl"],
                     "text": rating["notes"],
-                    "enjoyment": rating["enjoyment"],
+                    "dc": rating["dc"],
                 })
     notes.sort(key=lambda n: (n["bowl"], n["player"]))
 
@@ -315,27 +488,29 @@ def compute(tasting, users):
             "name": p["name"],
             "best": per_player[p["id"]]["best"],
             "worst": per_player[p["id"]]["worst"],
-            "average": mean(per_player[p["id"]]["enjoyment"]) if per_player[p["id"]]["enjoyment"] else None,
-            "rated": len(per_player[p["id"]]["enjoyment"]),
+            "average": mean(per_player[p["id"]]["dc"]) if per_player[p["id"]]["dc"] else None,
+            "rated": len(per_player[p["id"]]["dc"]),
+            "tier": addiction_tier(mean(per_player[p["id"]]["dc"])) if per_player[p["id"]]["dc"] else None,
         }
         for p in players
     ]
 
-    all_values = [r["enjoyment"] for ratings in all_ratings.values() for r in ratings.values()]
+    all_values = [r["dc"] for ratings in all_ratings.values() for r in ratings.values()]
     scale_averages = {}
     rated_chips = [c for c in chips if c["raters"]]
     if rated_chips:
         scale_averages = {k: mean(c["scales"][k] for c in rated_chips) for k in SCALE_KEYS}
 
-    awards = _chip_awards(chips) + _player_awards(players, per_player, guessing)
+    price_reads, pricing = _price_stats(chips, players, all_ratings)
+    awards = _chip_awards(chips) + _player_awards(players, per_player, guessing, price_reads)
 
     return {
         "summary": {
             "chips": len(chips_raw),
             "ratings": len(all_values),
             "average": mean(all_values) if all_values else None,
-            "nat20": sum(1 for v in all_values if v == 20),
-            "nat1": sum(1 for v in all_values if v == 1),
+            "dc20": sum(1 for v in all_values if v == 20),
+            "dc1": sum(1 for v in all_values if v == 1),
         },
         "chips": chips,
         "scale_keys": SCALE_KEYS,
@@ -354,6 +529,9 @@ def compute(tasting, users):
             "min_shared": MIN_SHARED_FOR_CORRELATION,
         },
         "tops": tops,
+        "pricing": pricing,
+        "alignment_names": {f"{law}/{good}": a["name"] for (law, good), a in ALIGNMENTS.items()},
+        "player_alignments": _player_alignments(players, per_player, all_ratings),
         "awards": awards,
         "notes": notes,
     }

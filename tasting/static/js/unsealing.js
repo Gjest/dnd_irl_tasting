@@ -17,7 +17,7 @@ function card(chip, isNew) {
   name.append(el("span", "reveal-name", chip.label));
   name.append(el("span", "reveal-meta", `Schale ${chip.bowl} · ${chip.flavor_type}`));
   item.append(name);
-  item.append(el("span", "reveal-score", fmt(chip.enjoyment)));
+  item.append(el("span", "reveal-score", `DC ${fmt(chip.dc)}`));
   return item;
 }
 

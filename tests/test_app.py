@@ -52,9 +52,9 @@ class Base(unittest.TestCase):
         self.post(admin, "/chips", name="Drittchip", brand="Pringles", flavor_type="BBQ", price="3")
         return admin, self.store.read()["chips"]
 
-    def rate(self, client, chip_id, enjoyment, score=3, **extra):
+    def rate(self, client, chip_id, dc, score=3, **extra):
         fields = {f"score_{k}": str(score) for k in SCALE_KEYS}
-        return self.post(client, f"/schale/{chip_id}", enjoyment=str(enjoyment), **fields, **extra)
+        return self.post(client, f"/schale/{chip_id}", dc=str(dc), **fields, **extra)
 
 
 class Security(Base):
@@ -204,7 +204,7 @@ class Blindness(Base):
         self.rate(player, chips[0]["id"], 10)
         self.post(admin, "/admin/ceremony/start")
         self.rate(player, chips[0]["id"], 20)
-        self.assertEqual(self.store.read()["ratings"][chips[0]["id"]]["a"]["enjoyment"], 10)
+        self.assertEqual(self.store.read()["ratings"][chips[0]["id"]]["a"]["dc"], 10)
 
     def test_reopen_keeps_ratings(self):
         admin, chips = self.add_chips()
@@ -213,7 +213,7 @@ class Blindness(Base):
         self.post(admin, "/admin/ceremony/reopen")
         data = self.store.read()
         self.assertEqual(data["phase"], "tasting")
-        self.assertEqual(data["ratings"][chips[0]["id"]]["a"]["enjoyment"], 10)
+        self.assertEqual(data["ratings"][chips[0]["id"]]["a"]["dc"], 10)
 
 
 class Rating(Base):
@@ -221,7 +221,7 @@ class Rating(Base):
         _, chips = self.add_chips()
         player = self.client("a")
         chip = chips[0]["id"]
-        self.assertEqual(self.post(player, f"/schale/{chip}", enjoyment="10").status_code, 422)
+        self.assertEqual(self.post(player, f"/schale/{chip}", dc="10").status_code, 422)
         self.assertEqual(self.rate(player, chip, 21).status_code, 422)
         self.assertEqual(self.rate(player, chip, 0).status_code, 422)
         self.assertEqual(self.rate(player, chip, 10, score=6).status_code, 422)
@@ -235,14 +235,14 @@ class Rating(Base):
         self.assertEqual(self.rate(player, chip, 15).status_code, 302)
         ratings = self.store.read()["ratings"][chip]
         self.assertEqual(list(ratings), ["a"])
-        self.assertEqual(ratings["a"]["enjoyment"], 15)
+        self.assertEqual(ratings["a"]["dc"], 15)
 
     def test_unknown_extras_are_dropped(self):
         _, chips = self.add_chips()
         player = self.client("a")
-        self.rate(player, chips[0]["id"], 10, npc="Vecna", coins="999", guess_flavor="Blut", contract="maybe")
+        self.rate(player, chips[0]["id"], 10, coins="999", guess_flavor="Blut", contract="maybe")
         rating = self.store.read()["ratings"][chips[0]["id"]]["a"]
-        self.assertIsNone(rating["npc"])
+        self.assertNotIn("npc", rating)
         self.assertIsNone(rating["coins"])
         self.assertIsNone(rating["guess_flavor"])
         self.assertIsNone(rating["contract"])
@@ -256,6 +256,19 @@ class Rating(Base):
         for bad in ("abc", "nan", "inf", "-1"):
             self.post(admin, "/chips", name="x", flavor_type="BBQ", price=bad)
         self.assertEqual(self.store.read()["chips"], [])
+
+    def test_bad_weight_is_rejected(self):
+        admin = self.client("admin")
+        for bad in ("abc", "nan", "0", "-5", "99999"):
+            self.post(admin, "/chips", name="x", flavor_type="BBQ", weight=bad)
+        self.assertEqual(self.store.read()["chips"], [])
+        self.post(admin, "/chips", name="x", flavor_type="BBQ", price="2", weight="175,5")
+        self.assertEqual(self.store.read()["chips"][0]["weight"], 175.5)
+
+    def test_removed_categories_are_gone(self):
+        self.assertNotIn("fingers", SCALE_KEYS)
+        self.assertNotIn("wisdom", SCALE_KEYS)
+        self.assertIn("grease", SCALE_KEYS)
 
     def test_rated_chips_cannot_be_shuffled(self):
         admin, chips = self.add_chips()
@@ -335,6 +348,19 @@ class PlayerChips(Base):
         self.assertIsNone(rating["guess_flavor"])
         self.assertEqual(rating["guess_brand"], "")
 
+    def test_own_chip_price_guess_is_dropped(self):
+        alice = self.client("a")
+        chip = self.add(alice)
+        self.rate(alice, chip["id"], 10, coins="7")
+        self.assertIsNone(self.store.read()["ratings"][chip["id"]]["a"]["coins"])
+
+    def test_weight_stays_private_before_reveal(self):
+        alice, bob = self.client("a"), self.client("b")
+        self.post(alice, "/chips", name="Schwer", flavor_type="BBQ", price="2,50", weight="4242")
+        chip = self.store.read()["chips"][0]
+        for url in ("/", "/api/progress", f"/schale/{chip['id']}"):
+            self.assertNotIn("4242", bob.get(url).get_data(as_text=True), url)
+
 
 class Cleanup(Base):
     def setUp(self):
@@ -354,7 +380,7 @@ class Cleanup(Base):
         self.post(self.admin, f"/admin/daten/{self.chip}/a/note/delete")
         rating = self.store.read()["ratings"][self.chip]["a"]
         self.assertEqual(rating["notes"], "")
-        self.assertEqual(rating["enjoyment"], 10)
+        self.assertEqual(rating["dc"], 10)
 
     def test_delete_rating(self):
         self.post(self.admin, f"/admin/daten/{self.chip}/a/delete")
@@ -415,9 +441,17 @@ class Persistence(Base):
         _, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 13, notes="Ümläute öäü")
         reloaded = Store(self.tmp.name).read()
-        self.assertEqual(reloaded["ratings"][chips[0]["id"]]["a"]["enjoyment"], 13)
+        self.assertEqual(reloaded["ratings"][chips[0]["id"]]["a"]["dc"], 13)
         with open(os.path.join(self.tmp.name, "tasting.json"), encoding="utf-8") as f:
             self.assertIn("Ümläute", f.read())
+
+    def test_old_d20_ratings_are_upgraded(self):
+        path = os.path.join(self.tmp.name, "tasting.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"phase": "tasting", "chips": [], "ratings": {"x": {"a": {"enjoyment": 13, "scores": {}}}}}, f)
+        rating = Store(self.tmp.name).read()["ratings"]["x"]["a"]
+        self.assertEqual(rating["dc"], 13)
+        self.assertNotIn("enjoyment", rating)
 
     def test_login_survives_restart(self):
         client = self.client("a")
@@ -470,12 +504,12 @@ class Manage(unittest.TestCase):
 
 class Stats(unittest.TestCase):
     def tasting(self):
-        def rating(enjoyment, **extra):
-            return {"scores": {k: 3 for k in SCALE_KEYS}, "enjoyment": enjoyment, **extra}
+        def rating(dc, **extra):
+            return {"scores": {k: 3 for k in SCALE_KEYS}, "dc": dc, **extra}
 
         chips = [
-            {"id": "x", "bowl": 1, "name": "X", "brand": "Funny-Frisch", "flavor_type": "Paprika", "price": 2.0, "own_brand": False},
-            {"id": "y", "bowl": 2, "name": "Y", "brand": "Lorenz", "flavor_type": "BBQ", "price": 1.0, "own_brand": True},
+            {"id": "x", "bowl": 1, "name": "X", "brand": "Funny-Frisch", "flavor_type": "Paprika", "price": 2.0, "weight": 100, "own_brand": False},
+            {"id": "y", "bowl": 2, "name": "Y", "brand": "Lorenz", "flavor_type": "BBQ", "price": 1.0, "weight": 200, "own_brand": True},
             {"id": "z", "bowl": 3, "name": "Z", "brand": "Pringles", "flavor_type": "Käse", "price": None, "own_brand": False},
         ]
         ratings = {
@@ -538,6 +572,96 @@ class Stats(unittest.TestCase):
         result = stats.compute(tasting, self.users)
         self.assertIsNone(result["twins"]["closest"])
         self.assertIsNone(self.award(result, "elturel"))
+
+    def test_price_per_100g_compares_bag_sizes_fairly(self):
+        self.assertEqual(stats.price_per_100g({"price": 2.0, "weight": 200}), 1.0)
+        self.assertIsNone(stats.price_per_100g({"price": 2.0}))
+        self.assertIsNone(stats.price_per_100g({"price": None, "weight": 200}))
+
+    def priced(self, coins_a, coins_b):
+        """Three chips at 1, 2 and 3 euros per 100 g, with blind coin guesses."""
+        def rating(dc, coins):
+            return {"scores": {k: 3 for k in SCALE_KEYS}, "dc": dc, "coins": coins}
+
+        chips = [
+            {"id": str(n), "bowl": n, "name": f"C{n}", "flavor_type": "BBQ", "price": float(n), "weight": 100}
+            for n in (1, 2, 3)
+        ]
+        ratings = {
+            str(n): {"a": rating(5 * n, coins_a[n - 1]), "b": rating(5 * n, coins_b[n - 1])}
+            for n in (1, 2, 3)
+        }
+        return {"chips": chips, "ratings": ratings}
+
+    def test_price_guess_correlation_names_best_and_worst_reader(self):
+        result = stats.compute(self.priced([1, 5, 9], [9, 5, 1]), self.users)
+        self.assertEqual(self.award(result, "accountant")["winner"], "A")
+        self.assertEqual(self.award(result, "mammon")["winner"], "B")
+        self.assertEqual([r["name"] for r in result["pricing"]["readers"]], ["A", "B"])
+        self.assertAlmostEqual(result["pricing"]["dc_r"], 1.0)
+        self.assertIn("süchtig", result["pricing"]["dc_verdict"])
+
+    def test_good_price_reader_is_not_called_betrayed(self):
+        result = stats.compute(self.priced([1, 5, 9], [2, 5, 8]), self.users)
+        self.assertIsNone(self.award(result, "mammon"))
+        self.assertIsNotNone(self.award(result, "accountant"))
+
+    def test_price_group_verdict_follows_correlation(self):
+        result = stats.compute(self.priced([1, 5, 9], [1, 5, 9]), self.users)
+        self.assertAlmostEqual(result["pricing"]["guess_r"], 1.0)
+        self.assertIn("riecht Preise", result["pricing"]["guess_verdict"])
+        result = stats.compute(self.priced([9, 5, 1], [9, 5, 1]), self.users)
+        self.assertIn("Marketing", result["pricing"]["guess_verdict"])
+
+    def test_price_stats_stay_quiet_without_enough_data(self):
+        result = stats.compute(self.tasting(), self.users)
+        self.assertIsNone(result["pricing"]["guess_r"])
+        self.assertIsNone(self.award(result, "accountant"))
+        self.assertIsNone(self.award(result, "impostor"))
+
+    def test_impostor_looks_expensive_but_is_cheap(self):
+        result = stats.compute(self.priced([9, 5, 1], [9, 5, 1]), self.users)
+        self.assertEqual(self.award(result, "impostor")["winner"], "C1")
+        self.assertEqual(self.award(result, "hidden_gem")["winner"], "C3")
+
+    def test_tiers_cover_the_whole_range(self):
+        self.assertEqual(stats.addiction_tier(1)["name"], "Immun")
+        self.assertEqual(stats.addiction_tier(14.9)["name"], "Bezaubert")
+        self.assertEqual(stats.addiction_tier(15)["name"], "Gepackt")
+        self.assertEqual(stats.addiction_tier(20)["name"], "Beherrscht")
+
+    def test_character_sheet_and_conditions(self):
+        tasting = self.tasting()
+        for rating in tasting["ratings"]["x"].values():
+            rating["scores"].update(heat=5, potato=1, hardness=5, crunch=5)
+        result = stats.compute(tasting, self.users)
+        chip = next(c for c in result["chips"] if c["id"] == "x")
+        strength = next(a for a in chip["sheet"] if a["label"] == "STÄ")
+        self.assertEqual((strength["score"], strength["modifier"]), (18, 4))
+        self.assertLessEqual({"Brennend", "Unsichtbar", "Taub", "Kampfunfähig"}, {c["name"] for c in chip["conditions"]})
+        self.assertEqual(self.award(result, "conditions")["winner"], "Funny-Frisch X")
+        calm = next(c for c in result["chips"] if c["id"] == "y")
+        self.assertEqual(calm["conditions"], [])
+
+    def test_chip_alignment_extremes(self):
+        tasting = self.tasting()
+        for rating in tasting["ratings"]["y"].values():
+            rating["scores"].update(integrity=5, harmony=5, coverage=1, potato=5, artificial=1, heat=1, thirst=1)
+        for rating in tasting["ratings"]["x"].values():
+            rating["scores"].update(integrity=1, harmony=1, coverage=5, potato=1, artificial=5, heat=5, thirst=5)
+        chips = {c["id"]: c for c in stats.compute(tasting, self.users)["chips"]}
+        self.assertEqual(chips["y"]["alignment"]["name"], "Rechtschaffen Gut")
+        self.assertEqual(chips["x"]["alignment"]["name"], "Chaotisch Böse")
+
+    def test_player_alignment_follows_behaviour(self):
+        tasting = self.tasting()
+        tasting["ratings"]["x"]["c"]["contract"] = True
+        tasting["ratings"]["y"]["c"]["contract"] = True
+        tasting["ratings"]["z"]["c"]["contract"] = True
+        rows = {r["name"]: r for r in stats.compute(tasting, self.users)["player_alignments"]}
+        self.assertEqual(rows["C"]["alignment"]["law"], "chaotic")
+        self.assertEqual(rows["C"]["alignment"]["good"], "evil")
+        self.assertEqual(rows["A"]["alignment"]["law"], "lawful")
 
     def test_brand_matching(self):
         self.assertTrue(stats.brand_matches("funny", "Funny-Frisch"))

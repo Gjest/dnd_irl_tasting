@@ -13,5 +13,8 @@
     </select></label>
   <label class="field"><span>Preis pro Tüte in € (optional)</span>
     <input type="text" name="price" inputmode="decimal" maxlength="8" value="{{ ('%.2f'|format(chip.price)|replace('.', ',')) if chip and chip.price is not none else '' }}" placeholder="1,99"></label>
+  <label class="field"><span>Gewicht der Tüte in g (optional)</span>
+    <input type="text" name="weight" inputmode="decimal" maxlength="6" value="{{ '%g'|format(chip.weight) if chip and chip.weight else '' }}" placeholder="175"></label>
+  <p class="hint">Mit Preis und Gewicht wird fair verglichen, egal wie groß die Tüte ist.</p>
   <label class="check"><input type="checkbox" name="own_brand" {% if chip and chip.own_brand %}checked{% endif %}> Eigenmarke (No-Name)</label>
 {% endmacro %}

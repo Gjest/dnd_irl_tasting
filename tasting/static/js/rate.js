@@ -6,12 +6,13 @@ const countLabel = document.getElementById("rate-count");
 const requiredNames = [...new Set(
   [...form.querySelectorAll("input[type=radio][required]")].map((input) => input.name),
 )];
+const dcInput = form.elements.namedItem("dc");
 
 function updateCount() {
-  const done = requiredNames.filter((name) => form.querySelector(`input[name="${name}"]:checked`)).length;
-  countLabel.textContent = done === requiredNames.length
-    ? "Alles bewertet"
-    : `${done} von ${requiredNames.length} bewertet`;
+  const done = requiredNames.filter((name) => form.querySelector(`input[name="${name}"]:checked`)).length
+    + (dcInput.value ? 1 : 0);
+  const total = requiredNames.length + 1;
+  countLabel.textContent = done === total ? "Alles bewertet" : `${done} von ${total} bewertet`;
 }
 
 // Browser storage may be unavailable (private mode), so a draft is only a bonus.
@@ -46,26 +47,28 @@ function clearDraft() {
 }
 
 let critTimer = null;
-function showCrit(isHit) {
+function showCrit(isTop) {
   const crit = document.getElementById("crit");
   crit.hidden = true;
   void crit.offsetWidth; // restarts the animation on repeated clicks
-  crit.className = isHit ? "crit crit-hit" : "crit crit-fail";
-  document.getElementById("crit-text").textContent = isHit ? "Kritischer Treffer!" : "Kritischer Patzer!";
+  crit.className = isTop ? "crit crit-hit" : "crit crit-fail";
+  document.getElementById("crit-text").textContent = isTop ? "DC 20: Beherrscht!" : "DC 1: Immun!";
   crit.hidden = false;
   clearTimeout(critTimer);
   critTimer = setTimeout(() => { crit.hidden = true; }, 1600);
 }
 
 if (form.dataset.hasSaved !== "1") restoreDraft();
+die.syncFromInput();
 updateCount();
 
-form.addEventListener("input", (event) => {
+form.addEventListener("input", () => {
   saveDraft();
   updateCount();
-  if (event.target.name === "enjoyment") {
-    if (event.target.value === "20") showCrit(true);
-    if (event.target.value === "1") showCrit(false);
-  }
+});
+// The die reports "change" once it has settled, so spinning past 20 doesn't count.
+dcInput.addEventListener("change", () => {
+  if (dcInput.value === "20") showCrit(true);
+  if (dcInput.value === "1") showCrit(false);
 });
 form.addEventListener("submit", clearDraft);

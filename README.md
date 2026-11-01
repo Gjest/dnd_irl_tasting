@@ -4,16 +4,22 @@ A chips tasting for our Descent into Avernus group. It runs in one Docker contai
 
 ## Start
 
-On the laptop, once:
+The laptop needs Docker with the Compose plugin. Make sure the Docker service runs and starts at boot:
 
 ```bash
-git clone <your-repo-url> blutkrieg && cd blutkrieg
+sudo systemctl enable --now docker
+```
+
+Then, once:
+
+```bash
+git clone git@github.com:Gjest/dnd_irl_tasting.git && cd dnd_irl_tasting
 ./setup.sh
 ```
 
 `setup.sh` asks for the laptop's WLAN IP (with a suggestion), builds and starts the container, and prints each person's passphrase **once**. Write them down: only their hashes are stored.
 
-After that the container restarts on its own with the laptop. By hand:
+After that the container comes back on its own after a reboot, unless you stopped it with `docker compose down`. By hand:
 
 ```bash
 docker compose up -d
@@ -29,8 +35,8 @@ Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_
 
 ## During the tasting
 
-1. **Before:** everyone adds the chips they brought under "Chips mitgebracht?" on their bowls page. Only the person who added a chip and the admin can see what's in that bowl.
-2. **Tasting:** players rate every bowl, including their own, and can change a rating until the reveal. Your own bowls earn no guessing points. Everyone sees who is still missing which bowl, but no scores.
+1. **Before:** everyone adds the chips they brought under "Chips mitgebracht?" on their bowls page, ideally with price and bag weight so that prices compare per 100 g. Only the person who added a chip and the admin can see what's in that bowl.
+2. **Tasting:** players rate every bowl, including their own, and can change a rating until the reveal. The ranking comes from the Sucht-Save: turn the 3D d20 to how hard it is to stop eating (DC 1 to 20). On your own bowls you can't guess the flavor, brand or price. Everyone sees who is still missing which bowl, but no scores.
 3. **Reveal:** press "Enthüllung starten" and click through on the big screen. This locks ratings. "Wertung wieder öffnen" undoes it without losing anything.
 4. **After:** results, statistics and printable certificates are open to everyone.
 

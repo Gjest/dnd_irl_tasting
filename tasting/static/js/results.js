@@ -75,19 +75,19 @@ function chartBox(short) {
 // --- Tabs ------------------------------------------------------------------
 
 function renderRanking() {
-  const rated = data.chips.filter((c) => c.enjoyment !== null);
-  panel.append(heading("Rangliste", "Durchschnittlicher Genuss-Wurf (d20). Bei Gleichstand entscheidet die Harmonie."));
+  const rated = data.chips.filter((c) => c.dc !== null);
+  panel.append(heading("Rangliste", "Durchschnittlicher DC des Sucht-Saves: je höher, desto schwerer kommst du von der Schale los. Bei Gleichstand entscheidet die Harmonie."));
   panel.append(bars(rated.map((c) => ({
     label: `${c.rank}. ${c.label}`,
-    detail: `${c.flavor_type} · ${c.raters} Wertungen`,
-    value: c.enjoyment,
-    valueText: fmt(c.enjoyment),
+    detail: `${c.tier.name} · ${c.flavor_type} · ${c.raters} Wertungen`,
+    value: c.dc,
+    valueText: fmt(c.dc),
   })), 20));
 }
 
 function renderXray() {
   panel.append(heading("Röntgenblick", "Das Sinnesprofil einer Schale gegen den Schnitt aller Schalen. Alle Achsen laufen von 1 bis 5."));
-  const rated = data.chips.filter((c) => c.enjoyment !== null);
+  const rated = data.chips.filter((c) => c.dc !== null);
   const select = el("select");
   select.setAttribute("aria-label", "Chips auswählen");
   for (const chip of rated) {
@@ -105,12 +105,11 @@ function renderXray() {
 
   function show() {
     const chip = rated.find((c) => c.id === select.value);
-    const npc = chip.npc.slice().sort((a, b) => b.votes - a.votes)[0];
     const items = [
-      ["Genuss", `${fmt(chip.enjoyment)} / 20`],
-      ["Seelenmünzen", chip.coins === null ? "–" : fmt(chip.coins)],
+      ["Sucht-DC", fmt(chip.dc)],
+      ["Zustand", chip.tier.name],
+      ["Gesinnung", chip.alignment.name],
       ["Verträge", String(chip.contracts)],
-      ["Als NPC", npc ? `${npc.name} (${npc.votes})` : "–"],
     ];
     facts.replaceChildren(...items.map(([label, value]) => {
       const fact = el("span", "fact", `${label}: `);
@@ -179,7 +178,7 @@ function renderXray() {
 }
 
 function renderControversy() {
-  panel.append(heading("Der Blutkrieg", "Wie weit die Genuss-Würfe auseinanderliegen (Standardabweichung). Je länger der Balken, desto lauter der Streit."));
+  panel.append(heading("Der Blutkrieg", "Wie weit die Sucht-DCs auseinanderliegen (Standardabweichung). Je länger der Balken, desto lauter der Streit."));
   const rows = data.chips.filter((c) => c.spread !== null).sort((a, b) => b.spread - a.spread);
   if (!rows.length) {
     panel.append(emptyNote("Streit braucht mindestens zwei Meinungen zur selben Schale."));
@@ -243,7 +242,7 @@ function renderTwins() {
 }
 
 function renderBattles() {
-  panel.append(heading("Schlachten", "Durchschnittlicher Genuss nach Lager."));
+  panel.append(heading("Schlachten", "Durchschnittlicher Sucht-DC nach Lager."));
   const { flavor, brand } = data.battles;
   panel.append(el("h3", "", "Geschmacksrichtungen"));
   panel.append(flavor.length
@@ -255,9 +254,24 @@ function renderBattles() {
     : emptyNote("Für diese Schlacht braucht es beide Lager."));
 }
 
+function verdictBox(title, r, verdict) {
+  const box = el("div", "person");
+  box.append(el("h3", "", title));
+  box.append(el("p", "", verdict));
+  box.append(el("p", "hint", `Korrelation ${fmt(r, 2)}`));
+  return box;
+}
+
 function renderCoins() {
-  panel.append(heading("Seelenmünzen", "Wie viele Seelenmünzen die Gruppe für eine Tüte zahlen würde, gegen den echten Preis. Höher und weiter links ist das bessere Geschäft."));
-  const rows = data.chips.filter((c) => c.price !== null && c.coins !== null);
+  const pricing = data.pricing;
+  panel.append(heading("Seelenmünzen", "Blind geschätzt: Wie teuer wirkt die Schale, verglichen mit dem echten Preis pro 100 g? Korrelation +1 heißt perfekt getroffen, 0 reiner Zufall, −1 genau verkehrt herum."));
+  const callouts = el("div", "callouts");
+  if (pricing.guess_r !== null) callouts.append(verdictBox("Preisgefühl der Gruppe", pricing.guess_r, pricing.guess_verdict));
+  if (pricing.dc_r !== null) callouts.append(verdictBox("Macht teuer süchtig?", pricing.dc_r, pricing.dc_verdict));
+  if (callouts.childElementCount) panel.append(callouts);
+  else panel.append(emptyNote(`Für Korrelationen braucht es mindestens ${pricing.min_chips} Schalen mit Preis, Gewicht und Schätzung.`));
+
+  const rows = data.chips.filter((c) => c.price_100g !== null && c.coins !== null);
   if (rows.length) {
     const { box, canvas } = chartBox(true);
     panel.append(box);
@@ -266,7 +280,7 @@ function renderCoins() {
       data: {
         datasets: [{
           label: "Chips",
-          data: rows.map((c) => ({ x: c.price, y: c.coins, label: c.label })),
+          data: rows.map((c) => ({ x: c.price_100g, y: c.coins, label: c.label })),
           backgroundColor: SERIES_CHIP,
           borderColor: "#1a1210",
           borderWidth: 2,
@@ -284,25 +298,105 @@ function renderCoins() {
             ...TOOLTIP,
             callbacks: {
               title: (items) => items[0].raw.label,
-              label: (c) => `${fmt(c.raw.x, 2)} € · ${fmt(c.raw.y)} Seelenmünzen`,
+              label: (c) => `${fmt(c.raw.x, 2)} € pro 100 g · ${fmt(c.raw.y)} Seelenmünzen`,
             },
           },
         },
         scales: {
-          x: { title: { display: true, text: "Preis pro Tüte (€)" }, grid: { color: GRID }, beginAtZero: true },
-          y: { title: { display: true, text: "Ø Seelenmünzen" }, grid: { color: GRID }, min: 0, max: 10 },
+          x: { title: { display: true, text: "Echter Preis pro 100 g (€)" }, grid: { color: GRID }, beginAtZero: true },
+          y: { title: { display: true, text: "Ø geschätzte Seelenmünzen" }, grid: { color: GRID }, min: 0, max: 10 },
         },
       },
     });
-  } else {
-    panel.append(emptyNote("Für das Diagramm braucht es Preise und Münzgebote."));
   }
-  const all = data.chips.filter((c) => c.enjoyment !== null);
+
+  if (pricing.readers.length) {
+    panel.append(el("h3", "", "Wer riecht den Preis?"));
+    panel.append(table(
+      ["Wer", "Preisgefühl", "Schalen"],
+      pricing.readers.map((r) => [r.name, fmt(r.r, 2), String(r.chips)]),
+      [1, 2],
+    ));
+  }
+
+  panel.append(el("h3", "", "Alle Schalen"));
   panel.append(table(
-    ["Chips", "Preis", "Ø Münzen", "Verträge"],
-    all.map((c) => [c.label, c.price === null ? "–" : `${fmt(c.price, 2)} €`, fmt(c.coins), String(c.contracts)]),
-    [1, 2, 3],
+    ["Chips", "Tüte", "Gewicht", "€/100 g", "Ø Münzen", "Verträge"],
+    data.chips.filter((c) => c.dc !== null).map((c) => [
+      c.label,
+      c.price === null ? "–" : `${fmt(c.price, 2)} €`,
+      c.weight ? `${fmt(c.weight, 0)} g` : "–",
+      c.price_100g === null ? "–" : `${fmt(c.price_100g, 2)} €`,
+      fmt(c.coins),
+      String(c.contracts),
+    ]),
+    [1, 2, 3, 4, 5],
   ));
+}
+
+const LAW_ORDER = ["lawful", "neutral", "chaotic"];
+const GOOD_ORDER = ["good", "neutral", "evil"];
+
+function alignmentBlock(title, entries, textKey) {
+  panel.append(el("h3", "", title));
+  const grid = el("div", "alignment-grid");
+  for (const good of GOOD_ORDER) {
+    for (const law of LAW_ORDER) {
+      const here = entries.filter((e) => e.alignment.law === law && e.alignment.good === good);
+      const cell = el("div", here.length ? "alignment-cell alignment-filled" : "alignment-cell");
+      // The soft hyphen keeps the longest word from breaking mid-syllable on phones.
+      cell.append(el("h4", "", data.alignment_names[`${law}/${good}`].replace("Rechtschaffen", "Recht\u00adschaffen")));
+      for (const entry of here) cell.append(el("p", "", entry.name));
+      grid.append(cell);
+    }
+  }
+  panel.append(grid);
+  const seen = new Set();
+  for (const entry of entries) {
+    if (seen.has(entry.alignment.name)) continue;
+    seen.add(entry.alignment.name);
+    const card = el("article", "note");
+    card.append(el("small", "", entry.alignment.name));
+    card.append(el("p", "", entry.alignment[textKey]));
+    panel.append(card);
+  }
+}
+
+function renderAlignment() {
+  panel.append(heading("Gesinnung", "Chips: Ordnung kommt von Integrität, Harmonie und einem einigen Tisch, das Gute von Kartoffel und Harmonie statt Künstlichkeit, Schärfe und Durst. Abenteurer: Wer mit der Gruppe geht, ist rechtschaffen. Wer großzügig bewertet und keine Höllenverträge unterschreibt, ist gut."));
+  const chips = data.chips.filter((c) => c.alignment).map((c) => ({ name: c.label, alignment: c.alignment }));
+  alignmentBlock("Die Chips", chips, "chip");
+  const people = data.player_alignments;
+  alignmentBlock("Die Abenteurer", people, "player");
+}
+
+function renderSheets() {
+  panel.append(heading("Charakterbögen", "Jede Schale als Charakter: Die Attribute kommen aus den Bewertungen, die Zustände aus allem, was deutlich aus dem Rahmen fällt."));
+  const grid = el("div", "person-grid");
+  for (const chip of data.chips.filter((c) => c.dc !== null)) {
+    const card = el("article", "person");
+    card.append(el("h3", "", chip.label));
+    card.append(el("p", "hint", `Sucht-Save DC ${fmt(chip.dc)}: ${chip.tier.name}. ${chip.tier.line}`));
+    const sheet = el("div", "sheet");
+    for (const attribute of chip.sheet) {
+      const cell = el("div", "sheet-cell");
+      cell.title = attribute.name;
+      const sign = attribute.modifier >= 0 ? "+" : "−";
+      cell.append(el("b", "", attribute.label), el("strong", "", String(attribute.score)), el("small", "", `${sign}${Math.abs(attribute.modifier)}`));
+      sheet.append(cell);
+    }
+    card.append(sheet);
+    const list = el("ul", "condition-list");
+    if (!chip.conditions.length) list.append(el("li", "", "Keine Zustände. Langweilig, aber gesund."));
+    for (const condition of chip.conditions) {
+      const item = el("li");
+      item.append(el("b", "", `${condition.name}: `), condition.line);
+      list.append(item);
+    }
+    card.append(list);
+    grid.append(card);
+  }
+  panel.append(grid);
 }
 
 function renderOracle() {
@@ -355,7 +449,7 @@ function renderTops() {
       };
       add("Top", person.best);
       add("Flop", person.worst);
-      card.append(el("p", "hint", `${person.rated} Schalen, Ø ${fmt(person.average)}`));
+      card.append(el("p", "hint", `${person.rated} Schalen, Ø DC ${fmt(person.average)}. Zustand am Tisch: ${person.tier.name}.`));
     }
     grid.append(card);
   }
@@ -370,7 +464,7 @@ function renderNotes() {
   }
   for (const note of data.notes) {
     const card = el("article", "note");
-    card.append(el("small", "", `${note.player} über ${note.chip} · Wurf ${note.enjoyment}`));
+    card.append(el("small", "", `${note.player} über ${note.chip} · DC ${note.dc}`));
     card.append(el("p", "", note.text));
     panel.append(card);
   }
@@ -379,6 +473,8 @@ function renderNotes() {
 const TABS = [
   ["Rangliste", renderRanking],
   ["Trophäen", renderAwards],
+  ["Gesinnung", renderAlignment],
+  ["Charakterbögen", renderSheets],
   ["Röntgenblick", renderXray],
   ["Blutkrieg", renderControversy],
   ["Zwillinge", renderTwins],
@@ -404,9 +500,9 @@ function renderSummary() {
   const tiles = [
     [s.chips, "Schalen"],
     [s.ratings, "Wertungen"],
-    [fmt(s.average), "Ø Genuss"],
-    [s.nat20, "Nat 20"],
-    [s.nat1, "Nat 1"],
+    [fmt(s.average), "Ø Sucht-DC"],
+    [s.dc20, "× DC 20"],
+    [s.dc1, "× DC 1"],
   ];
   document.getElementById("summary").replaceChildren(...tiles.map(([value, label]) => {
     const tile = el("div", "tile");
