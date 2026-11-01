@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ award.title }} · Höllenvertrag{% endblock %}
+{% block body_class %}certificate-page{% endblock %}
+{% block content %}
+<div class="certificate-actions">
+  <a class="button" href="{{ url_for('main.results') }}">← Zurück</a>
+  <button id="print" class="button button-primary" type="button">Drucken</button>
+</div>
+<article class="certificate">
+  <p class="certificate-kicker">Infernaler Vertrag · Avernus, erste Schicht</p>
+  <h1>{{ award.title }}</h1>
+  <p class="certificate-intro">Hiermit wird unwiderruflich und bei Strafe des Styx verliehen an</p>
+  <p class="certificate-winner">{{ award.winner }}</p>
+  <p class="certificate-line">{{ award.line }}</p>
+  <p class="certificate-stat">{{ award.stat }}</p>
+  <div class="certificate-signatures">
+    <div><span class="signature">Zariel</span><small>Erzherzogin von Avernus</small></div>
+    <div><span class="signature">Bel</span><small>Oberster Waffenschmied</small></div>
+  </div>
+  <p class="certificate-small">Dieser Vertrag bindet die Seele des Empfängers. Umtausch ausgeschlossen, Krümel sind Vertragsbestandteil.</p>
+</article>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/certificate.js') }}"></script>{% endblock %}

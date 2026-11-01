@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="theme-color" content="#140d0b">
+  <title>{% block title %}Blutkrieg der Chips{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('main.home') }}">Blutkrieg <span>der Chips</span></a>
+    {% if user %}
+    <nav class="site-nav" aria-label="Hauptmenü">
+      {% if user.role == 'player' %}<a href="{{ url_for('main.home') }}">Schalen</a>{% endif %}
+      <a href="{{ url_for('main.unsealing') }}">Enthüllung</a>
+      <a href="{{ url_for('main.results') }}">Ergebnisse</a>
+      {% if user.role == 'admin' %}<a href="{{ url_for('main.admin') }}">Admin</a>{% endif %}
+      <form method="post" action="{{ url_for('main.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit" title="Abmelden: {{ user.name }}">Raus</button>
+      </form>
+    </nav>
+    {% endif %}
+  </header>
+  <main class="page">
+    {% with messages = get_flashed_messages() %}
+      {% for message in messages %}<p class="flash" role="status">{{ message }}</p>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

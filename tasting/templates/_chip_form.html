@@ -1,0 +1,17 @@
+{% macro chip_fields(chip, flavors, csrf_token) %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field"><span>Name</span>
+    <input type="text" name="name" required maxlength="80" value="{{ chip.name if chip else '' }}" placeholder="z. B. Ungarisch"></label>
+  <label class="field"><span>Marke</span>
+    <input type="text" name="brand" maxlength="80" value="{{ chip.brand if chip else '' }}" placeholder="Hersteller oder Supermarkt"></label>
+  <label class="field"><span>Geschmacksrichtung</span>
+    <select name="flavor_type" required>
+      <option value="">Auswählen …</option>
+      {% for flavor in flavors %}
+      <option {% if chip and chip.flavor_type == flavor %}selected{% endif %}>{{ flavor }}</option>
+      {% endfor %}
+    </select></label>
+  <label class="field"><span>Preis pro Tüte in € (optional)</span>
+    <input type="text" name="price" inputmode="decimal" maxlength="8" value="{{ ('%.2f'|format(chip.price)|replace('.', ',')) if chip and chip.price is not none else '' }}" placeholder="1,99"></label>
+  <label class="check"><input type="checkbox" name="own_brand" {% if chip and chip.own_brand %}checked{% endif %}> Eigenmarke (No-Name)</label>
+{% endmacro %}

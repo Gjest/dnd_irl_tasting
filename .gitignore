@@ -1,0 +1,9 @@
+# Ratings, logins and the session key stay on the server, never in git.
+data/*
+!data/.gitkeep
+.env
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.idea/

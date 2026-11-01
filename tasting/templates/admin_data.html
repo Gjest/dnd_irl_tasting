@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Datenpflege · Blutkrieg der Chips{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('main.admin') }}">← Admin</a>
+<p class="eyebrow">Spoiler: alle Wertungen im Klartext</p>
+<h1>Datenpflege</h1>
+<p class="lead">Vor jedem Löschen landet automatisch eine Sicherung in <code>data/backups</code>.</p>
+
+{% if tasting.phase == 'ceremony' %}
+<p class="flash flash-error">Während der Enthüllung lässt sich nichts löschen. Öffne vorher die Wertung wieder oder klicke die Enthüllung zu Ende.</p>
+{% endif %}
+
+{% for chip in chips %}
+<details class="card spoiler-card">
+  <summary>Schale {{ chip.bowl }}: {{ chip.label }} <small>({{ chip.entries|length }} Wertungen)</small></summary>
+  <p class="hint">Mitgebracht von {{ chip.added_by_name }}</p>
+  {% if tasting.phase != 'ceremony' %}
+  <form method="post" action="{{ url_for('main.delete_chip', chip_id=chip.id) }}"
+        data-confirm="Schale {{ chip.bowl }} mit allen {{ chip.entries|length }} Wertungen löschen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="data">
+    <button class="button button-danger" type="submit">Ganze Schale löschen</button>
+  </form>
+  {% endif %}
+  <ul class="entry-list">
+    {% for entry in chip.entries %}
+    <li>
+      <div class="entry-head">
+        <b>{{ entry.name }}</b>
+        <span>Wurf {{ entry.enjoyment }}</span>
+      </div>
+      {% if entry.notes %}<p class="entry-note">{{ entry.notes }}</p>{% endif %}
+      {% if tasting.phase != 'ceremony' %}
+      <div class="actions">
+        {% if entry.notes %}
+        <form method="post" action="{{ url_for('main.admin_delete_note', chip_id=chip.id, player_id=entry.id) }}" data-confirm="Notiz von {{ entry.name }} löschen?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="link-button" type="submit">Notiz löschen</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('main.admin_delete_rating', chip_id=chip.id, player_id=entry.id) }}" data-confirm="Wertung von {{ entry.name }} löschen?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="link-button" type="submit">Wertung löschen</button>
+        </form>
+      </div>
+      {% endif %}
+    </li>
+    {% else %}
+    <li class="empty">Noch keine Wertungen.</li>
+    {% endfor %}
+  </ul>
+</details>
+{% else %}
+<p class="empty">Noch keine Schalen.</p>
+{% endfor %}
+
+<section class="card card-danger">
+  <h2>Alles niederbrennen</h2>
+  <p class="hint">Löscht alle Schalen und Wertungen, zum Beispiel nach einem Probelauf. Logins bleiben erhalten. Tippe zur Bestätigung <b>{{ confirm_word }}</b> ein.</p>
+  <form method="post" action="{{ url_for('main.admin_reset') }}" class="inline-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="text" name="confirm" required autocomplete="off" aria-label="Bestätigungswort" placeholder="{{ confirm_word }}">
+    <button class="button button-danger" type="submit">Löschen</button>
+  </form>
+</section>
+{% endblock %}

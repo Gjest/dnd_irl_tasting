@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    image: blutkrieg-der-chips
+    container_name: blutkrieg-der-chips
+    restart: unless-stopped
+    # Bound to the WLAN IP only. Docker's published ports bypass ufw, so this
+    # binding is what actually limits who can reach the app.
+    ports:
+      - "${BIND_IP:?Run ./setup.sh first or set BIND_IP in .env}:${PORT:-9001}:8000"
+    environment:
+      PUBLIC_URL: "http://${BIND_IP}:${PORT:-9001}"
+      PLAYERS: "${PLAYERS:-}"
+    # Runs as your user so that ./data stays readable and writable on the host.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    volumes:
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 128

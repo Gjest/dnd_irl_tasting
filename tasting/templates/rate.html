@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Schale {{ bowl }} · Blutkrieg der Chips{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('main.home') }}">← Alle Schalen</a>
+<p class="eyebrow">{% if own_chip %}Deine eigenen Chips: {{ own_chip.brand }} {{ own_chip.name }}{% else %}Blindverkostung{% endif %}</p>
+<h1>Schale {{ bowl }}</h1>
+{% if errors %}
+<div class="flash flash-error" role="alert">
+  <p>Dem Vertrag fehlt noch etwas:</p>
+  <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" id="rate-form" class="rate-form"
+      data-draft-key="draft:{{ user.id }}:{{ chip_id }}" data-has-saved="{{ '1' if rating.enjoyment else '0' }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  {% for section in sections %}
+  <section class="rate-section">
+    <h2>{{ section.title }} <small>{{ section.subtitle }}</small></h2>
+    {% for r in section.ratings %}
+    <fieldset class="scale">
+      <legend>{{ r.label }}</legend>
+      <div class="scale-options">
+        {% for n in range(1, 6) %}
+        <label>
+          <input type="radio" name="score_{{ r.key }}" value="{{ n }}" required
+                 {% if rating.scores.get(r.key) == n %}checked{% endif %}>
+          <span>{{ n }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="scale-ends"><span>{{ r.low }}</span><span>{{ r.high }}</span></div>
+    </fieldset>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <section class="rate-section rate-verdict">
+    <h2>Der Genuss-Wurf <small>d20</small></h2>
+    <p class="hint">Dein persönliches Urteil und die Grundlage der Rangliste. 1 ist ein kritischer Patzer, 20 ein kritischer Treffer.</p>
+    <fieldset class="d20">
+      <legend class="sr-only">Genuss von 1 bis 20</legend>
+      <div class="d20-grid">
+        {% for n in range(1, 21) %}
+        <label class="{% if n == 1 %}nat1{% elif n == 20 %}nat20{% endif %}">
+          <input type="radio" name="enjoyment" value="{{ n }}" required {% if rating.enjoyment == n %}checked{% endif %}>
+          <span>{{ n }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+  </section>
+
+  {% if not own_chip %}
+  <section class="rate-section">
+    <h2>Das Orakel <small>Freiwillig, gibt Punkte</small></h2>
+    <label class="field">
+      <span>Welche Geschmacksrichtung? <em>{{ points_flavor }} Punkte</em></span>
+      <select name="guess_flavor">
+        <option value="">Keine Ahnung</option>
+        {% for flavor in flavors %}
+        <option {% if rating.guess_flavor == flavor %}selected{% endif %}>{{ flavor }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">
+      <span>Welche Marke? <em>{{ points_brand }} Punkte</em></span>
+      <input type="text" name="guess_brand" maxlength="80" autocomplete="off" value="{{ rating.guess_brand or '' }}"
+             placeholder="z. B. eine Marke oder Eigenmarke">
+    </label>
+  </section>
+  {% endif %}
+
+  <section class="rate-section">
+    <h2>Der Pakt <small>Freiwillig</small></h2>
+    <label class="field">
+      <span>Welcher NPC wäre diese Schale?</span>
+      <select name="npc">
+        <option value="">Niemand</option>
+        {% for npc in npcs %}
+        <option {% if rating.npc == npc %}selected{% endif %}>{{ npc }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">
+      <span>Wie viele Seelenmünzen für eine Tüte? (0 bis {{ max_coins }})</span>
+      <select name="coins">
+        <option value="">Kein Angebot</option>
+        {% for n in range(0, max_coins + 1) %}
+        <option value="{{ n }}" {% if rating.coins == n %}selected{% endif %}>{{ n }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <fieldset class="contract">
+      <legend>Höllenvertrag: ein Jahr lang nur diese Chips?</legend>
+      <label class="check"><input type="radio" name="contract" value="yes" {% if rating.contract is sameas true %}checked{% endif %}> Unterschreiben</label>
+      <label class="check"><input type="radio" name="contract" value="no" {% if rating.contract is sameas false %}checked{% endif %}> Niemals</label>
+    </fieldset>
+    <label class="field">
+      <span>Notizen des Abenteurers</span>
+      <textarea name="notes" rows="4" maxlength="{{ max_notes }}" placeholder="Schmeckt, als hätte ein Imp darauf geniest.">{{ rating.notes or '' }}</textarea>
+    </label>
+  </section>
+
+  <div class="rate-submit">
+    <span id="rate-count" class="rate-count" aria-live="polite"></span>
+    <button class="button button-primary" type="submit">Mit Blut unterschreiben</button>
+  </div>
+</form>
+
+<div id="crit" class="crit" hidden aria-live="assertive"><strong id="crit-text"></strong></div>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/rate.js') }}"></script>{% endblock %}

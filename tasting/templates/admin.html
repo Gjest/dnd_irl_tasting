@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Admin · Blutkrieg der Chips{% endblock %}
+{% from "_chip_form.html" import chip_fields %}
+{% block content %}
+<p class="eyebrow">Herr über Schalen und Asche</p>
+<h1>Admin</h1>
+
+<section class="card">
+  <h2>Status: {% if tasting.phase == 'tasting' %}Wertung läuft{% elif tasting.phase == 'ceremony' %}Enthüllung läuft{% else %}Enthüllt{% endif %}</h2>
+  {% if tasting.phase == 'tasting' %}
+  <p class="hint">Die Enthüllung sperrt alle Wertungen und legt die Reihenfolge fest. Du klickst dann auf dem großen Bildschirm Schale für Schale durch.</p>
+  <form method="post" action="{{ url_for('main.admin_start_ceremony') }}" data-confirm="Enthüllung starten und alle Wertungen sperren?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="button button-primary" type="submit">Enthüllung starten</button>
+  </form>
+  {% else %}
+  <div class="button-row">
+    <a class="button button-primary" href="{{ url_for('main.unsealing') }}">Zur Enthüllung</a>
+    <form method="post" action="{{ url_for('main.admin_reopen') }}" data-confirm="Wertung wieder öffnen? Die Enthüllung beginnt danach von vorn. Es gehen keine Wertungen verloren.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="button" type="submit">Wertung wieder öffnen</button>
+    </form>
+  </div>
+  {% endif %}
+</section>
+
+{% if public_url %}
+<section class="card card-split">
+  <div>
+    <h2>Einladung</h2>
+    <p class="hint">Alle müssen im selben WLAN sein. QR-Code scannen oder eintippen:</p>
+    <p class="url"><code>{{ public_url }}</code></p>
+  </div>
+  <img class="qr" src="{{ url_for('main.admin_qr') }}" alt="QR-Code zu {{ public_url }}" width="180" height="180">
+</section>
+{% endif %}
+
+{% if editing %}
+<section class="card">
+  <h2>Schale {{ editing.bowl }} bearbeiten</h2>
+  <form method="post" action="{{ url_for('main.update_chip', chip_id=editing.id) }}" class="stack">
+    {{ chip_fields(editing, flavors, csrf_token) }}
+    <div class="button-row">
+      <button class="button button-primary" type="submit">Speichern</button>
+      <a class="button" href="{{ url_for('main.admin') }}">Abbrechen</a>
+    </div>
+  </form>
+</section>
+{% elif tasting.phase == 'tasting' %}
+<section class="card">
+  <h2>Neue Schale</h2>
+  <form method="post" action="{{ url_for('main.add_chip') }}" class="stack">
+    {{ chip_fields(none, flavors, csrf_token) }}
+    <button class="button button-primary" type="submit">Schale anlegen</button>
+  </form>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Schalen ({{ chips|length }})</h2>
+  <p class="hint">Alle können ihre Chips selbst eintragen. Wertungen und einzelne Einträge löschst du in der Datenpflege.</p>
+  <a class="button" href="{{ url_for('main.admin_data') }}">Datenpflege</a>
+  {% if tasting.phase == 'tasting' and chips %}
+  <form method="post" action="{{ url_for('main.admin_shuffle') }}" data-confirm="Alle Schalennummern neu mischen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="button" type="submit" {% if any_ratings %}disabled{% endif %}>Schalen mischen</button>
+  </form>
+  {% endif %}
+  <details class="spoiler" {% if editing %}open{% endif %}>
+    <summary>Inhalt anzeigen (Spoiler!)</summary>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Schale</th><th>Chips</th><th>Von</th><th>Geschmack</th><th class="num">Preis</th><th class="num">Wertungen</th><th></th></tr></thead>
+      <tbody>
+      {% for chip in chips %}
+        <tr>
+          <td>{{ chip.bowl }}</td>
+          <td>{{ chip.brand }} {{ chip.name }}{% if chip.own_brand %} <small>(Eigenmarke)</small>{% endif %}</td>
+          <td>{{ adders.get(chip.added_by, '–') }}</td>
+          <td>{{ chip.flavor_type }}</td>
+          <td class="num">{{ ('%.2f'|format(chip.price)|replace('.', ',')) ~ ' €' if chip.price is not none else '–' }}</td>
+          <td class="num">{{ counts[chip.id] }}</td>
+          <td class="actions">
+            {% if tasting.phase != 'ceremony' %}
+            <a href="{{ url_for('main.admin', edit=chip.id) }}">Ändern</a>
+            <form method="post" action="{{ url_for('main.delete_chip', chip_id=chip.id) }}" data-confirm="Schale {{ chip.bowl }} mit {{ counts[chip.id] }} Wertungen löschen?">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+              <button class="link-button" type="submit">Löschen</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7">Noch keine Schalen.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </details>
+</section>
+
+<section class="card">
+  <h2>Daten mitnehmen</h2>
+  <p class="hint">Alles liegt auch als <code>data/tasting.json</code> auf dem Server. Passphrasen sind nie im Export.</p>
+  <div class="button-row">
+    <a class="button" href="{{ url_for('main.admin_export_csv') }}">CSV herunterladen</a>
+    <a class="button" href="{{ url_for('main.admin_export_json') }}">JSON herunterladen</a>
+  </div>
+</section>
+{% endblock %}

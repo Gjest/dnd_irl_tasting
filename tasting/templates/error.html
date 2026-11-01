@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Fehler {{ code }} · Blutkrieg der Chips{% endblock %}
+{% block content %}
+<section class="center-note">
+  <p class="eyebrow">Fehler {{ code }}</p>
+  <h1>Kritischer Patzer</h1>
+  <p class="lead">
+    {% if code == 403 %}Dieses Tor bleibt dir verschlossen. Falls du nur lange gewartet hast: Seite neu laden und noch mal versuchen.
+    {% elif code == 404 %}Hier gibt es nur Asche.
+    {% elif code == 413 %}Das ist zu viel Text, selbst für einen Barden.
+    {% else %}Diese Anfrage versteht hier unten niemand.{% endif %}
+  </p>
+  <a class="button" href="{{ url_for('main.home') }}">Zurück</a>
+</section>
+{% endblock %}

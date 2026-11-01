@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% from "_chip_form.html" import chip_fields %}
+{% block title %}Schalen · Blutkrieg der Chips{% endblock %}
+{% block content %}
+<p class="eyebrow">Hallo {{ user.name }}</p>
+<h1>Die Schalen</h1>
+<p class="lead">Probieren, ehrlich würfeln. Bis zur Enthüllung kannst du jede Wertung noch ändern.</p>
+<div id="bowls" class="bowl-grid" data-rate-url="{{ url_for('main.rate', chip_id='__id__') }}"></div>
+<p id="no-bowls" class="empty" hidden>Noch keine Schalen. Hast du Chips dabei?</p>
+
+{% if editing %}
+<section class="card">
+  <h2>Schale {{ editing.bowl }} bearbeiten</h2>
+  <form method="post" action="{{ url_for('main.update_chip', chip_id=editing.id) }}" class="stack">
+    {{ chip_fields(editing, flavors, csrf_token) }}
+    <div class="button-row">
+      <button class="button button-primary" type="submit">Speichern</button>
+      <a class="button" href="{{ url_for('main.home') }}">Abbrechen</a>
+    </div>
+  </form>
+</section>
+{% else %}
+<details class="card add-chip">
+  <summary>Chips mitgebracht? Hier eintragen</summary>
+  <p class="hint">Nur du siehst, was in deiner Schale ist. Du bewertest sie mit, bekommst für sie aber keine Orakelpunkte.</p>
+  <form method="post" action="{{ url_for('main.add_chip') }}" class="stack">
+    {{ chip_fields(none, flavors, csrf_token) }}
+    <button class="button button-primary" type="submit">Schale aufstellen</button>
+  </form>
+</details>
+{% endif %}
+
+{% if my_chips %}
+<h2>Deine Chips</h2>
+<ul class="my-chips">
+  {% for chip in my_chips %}
+  <li>
+    <span><b>Schale {{ chip.bowl }}</b> {{ chip.brand }} {{ chip.name }}</span>
+    <span class="actions">
+      <a href="{{ url_for('main.home', edit=chip.id) }}">Ändern</a>
+      <form method="post" action="{{ url_for('main.delete_chip', chip_id=chip.id) }}" data-confirm="Schale {{ chip.bowl }} löschen?">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">Löschen</button>
+      </form>
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<h2>Wer kaut noch?</h2>
+<ul id="progress" class="progress-list"></ul>
+<p id="load-error" class="flash flash-error" hidden>Die Verbindung zum Höllenbuch ist abgerissen. Neuer Versuch läuft.</p>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/bowls.js') }}"></script>{% endblock %}

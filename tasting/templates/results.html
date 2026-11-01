@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Ergebnisse · Blutkrieg der Chips{% endblock %}
+{% block content %}
+<p class="eyebrow">Das Höllenbuch ist geöffnet</p>
+<h1>Ergebnisse</h1>
+<div id="summary" class="tiles"></div>
+<nav id="tabs" class="tabs" aria-label="Statistiken"></nav>
+<div id="panel" class="panel"></div>
+<p id="load-error" class="flash flash-error" hidden>Das Höllenbuch ließ sich nicht öffnen. Lade die Seite neu.</p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/results.js') }}"></script>
+{% endblock %}

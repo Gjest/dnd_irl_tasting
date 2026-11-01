@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Die Enthüllung · Blutkrieg der Chips{% endblock %}
+{% block body_class %}ceremony-page{% endblock %}
+{% block content %}
+<section class="ceremony" id="ceremony"
+         data-is-admin="{{ '1' if user.role == 'admin' else '0' }}"
+         data-results-url="{{ url_for('main.results') }}"
+         data-next-url="{{ url_for('main.api_ceremony_next') }}">
+  <p class="eyebrow">Vom Schlechtesten zum Besten</p>
+  <h1>Die Enthüllung</h1>
+  <p class="lead" id="ceremony-status" aria-live="polite">Die Siegel werden geprüft …</p>
+  {% if user.role == 'admin' %}
+  <button id="ceremony-next" class="button button-primary button-big" type="button">Nächste Schale enthüllen</button>
+  {% endif %}
+  <a id="ceremony-done" class="button button-primary button-big" href="{{ url_for('main.results') }}" hidden>Zu Statistik und Trophäen</a>
+  <ol id="ceremony-list" class="ceremony-list" reversed></ol>
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/unsealing.js') }}"></script>{% endblock %}

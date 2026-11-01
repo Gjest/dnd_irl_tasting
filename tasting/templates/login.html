@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Eintritt · Blutkrieg der Chips{% endblock %}
+{% block content %}
+<section class="login">
+  <p class="eyebrow">Avernus, erste Schicht der Neun Höllen</p>
+  <h1>Unterschreibe den Vertrag</h1>
+  <p class="lead">Nur wer die Passphrase kennt, darf von den verfluchten Chips kosten.</p>
+  {% if error %}<p class="flash flash-error" role="alert">{{ error }}</p>{% endif %}
+  {% if options %}
+  <form method="post" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field">
+      <span>Wer bist du?</span>
+      <select name="user" required>
+        <option value="">Auswählen …</option>
+        {% for option in options %}
+        <option value="{{ option.id }}" {% if request.form.get('user') == option.id %}selected{% endif %}>{{ option.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">
+      <span>Passphrase</span>
+      <input id="passphrase" type="password" name="passphrase" required autocomplete="current-password"
+             autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="wort-wort-wort-123">
+    </label>
+    <label class="check"><input id="show-passphrase" type="checkbox"> Passphrase anzeigen</label>
+    <button class="button button-primary" type="submit">Eintreten</button>
+  </form>
+  {% else %}
+  <p class="flash flash-error">Noch keine Logins angelegt. Führe <code>./setup.sh</code> auf dem Server aus.</p>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/login.js') }}"></script>{% endblock %}
