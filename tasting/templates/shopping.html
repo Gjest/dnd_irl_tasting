@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Einkauf · Blutkrieg der Chips{% endblock %}
+{% block content %}
+<p class="eyebrow">Vorbereitung für den Abstieg</p>
+<h1>Die Einkaufsliste</h1>
+<p class="lead">Wer bringt was mit? Alle sehen diese Liste, damit keine Tüte doppelt auf dem Tisch landet. Welche Schale daraus wird, sieht nur, wer sie kauft.</p>
+
+{% if open_phase %}
+<details class="card add-chip" {% if not count %}open{% endif %}>
+  <summary>Etwas auf die Liste setzen</summary>
+  <form method="post" action="{{ url_for('main.add_item') }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Was?</span>
+      <input type="text" name="name" required maxlength="80" placeholder="z. B. Ungarisch"></label>
+    <label class="field"><span>Marke (optional)</span>
+      <input type="text" name="brand" maxlength="80" placeholder="Hersteller oder Supermarkt"></label>
+    <label class="field"><span>Geschmacksrichtung (optional)</span>
+      <select name="flavor_type">
+        <option value="">Weiß ich noch nicht</option>
+        {% for flavor in flavors %}<option>{{ flavor }}</option>{% endfor %}
+      </select></label>
+    <label class="check"><input type="checkbox" name="own_brand"> Eigenmarke (No-Name)</label>
+    {% if is_player %}
+    <fieldset>
+      <legend>Wer kauft?</legend>
+      <label class="check"><input type="radio" name="buyer" value="me" checked> Ich kaufe das</label>
+      <label class="check"><input type="radio" name="buyer" value="open"> Nur ein Wunsch, jemand anderes soll</label>
+    </fieldset>
+    {% endif %}
+    <button class="button button-primary" type="submit">Auf die Liste</button>
+  </form>
+</details>
+{% else %}
+<p class="flash">Die Wertung ist versiegelt. Die Liste lässt sich nicht mehr ändern.</p>
+{% endif %}
+
+{% for title, items in groups %}
+<h2>{{ title }} <small>{{ items|length }}</small></h2>
+<ul class="shopping-list">
+  {% for item in items %}
+  <li class="{% if item.mine %}shopping-mine{% endif %}">
+    <div class="shopping-head">
+      <b>{{ item.label }}</b>
+      {% if item.set_up %}<span class="shopping-bowl">{% if item.bowl %}Schale {{ item.bowl }}{% endif %}</span>{% endif %}
+    </div>
+    <p class="shopping-meta">
+      {% if item.flavor_type %}{{ item.flavor_type }} · {% endif %}{% if item.own_brand %}Eigenmarke · {% endif %}
+      {% if item.buyer_name %}kauft {{ item.buyer_name }}{% else %}gewünscht von {{ item.creator_name }}{% endif %}
+    </p>
+    {% if open_phase %}
+    <div class="actions">
+      {% if is_player and not item.buyer %}
+      <form method="post" action="{{ url_for('main.claim_item', item_id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">Ich kaufe das</button>
+      </form>
+      {% endif %}
+      {% if item.mine and not item.set_up %}
+      <form method="post" action="{{ url_for('main.toggle_bought', item_id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">{% if item.bought %}Doch noch nicht gekauft{% else %}Gekauft{% endif %}</button>
+      </form>
+      <a href="{{ url_for('main.home', **{'from': item.id}) }}">Als Schale aufstellen</a>
+      <form method="post" action="{{ url_for('main.release_item', item_id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">Abgeben</button>
+      </form>
+      {% endif %}
+      {% if item.may_delete %}
+      <form method="post" action="{{ url_for('main.delete_item', item_id=item.id) }}" data-confirm="{{ item.label }} von der Liste streichen?">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">Streichen</button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </li>
+  {% else %}
+  <li class="empty">Nichts.</li>
+  {% endfor %}
+</ul>
+{% endfor %}
+{% endblock %}

@@ -37,17 +37,21 @@ def chip_label(chip):
     return f"{chip['brand']} {chip['name']}".strip() if chip.get("brand") else chip["name"]
 
 
-def _normalize_brand(text):
+def normalize_text(text):
     return re.sub(r"[^a-z0-9äöüß]", "", (text or "").lower())
 
 
+def similar(a, b):
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.8
+
+
 def brand_matches(guess, actual):
-    guess, actual = _normalize_brand(guess), _normalize_brand(actual)
+    guess, actual = normalize_text(guess), normalize_text(actual)
     if len(guess) < 3 or not actual:
         return False
     if guess in actual or actual in guess:
         return True
-    return difflib.SequenceMatcher(None, guess, actual).ratio() >= 0.8
+    return similar(guess, actual)
 
 
 def guess_hits(rating, chip, player_id):

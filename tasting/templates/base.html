@@ -15,6 +15,7 @@
     {% if user %}
     <nav class="site-nav" aria-label="Hauptmenü">
       {% if user.role == 'player' %}<a href="{{ url_for('main.home') }}">Schalen</a>{% endif %}
+      <a href="{{ url_for('main.shopping') }}">Einkauf</a>
       <a href="{{ url_for('main.unsealing') }}">Enthüllung</a>
       <a href="{{ url_for('main.results') }}">Ergebnisse</a>
       {% if user.role == 'admin' %}<a href="{{ url_for('main.admin') }}">Admin</a>{% endif %}

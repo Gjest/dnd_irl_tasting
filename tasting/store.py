@@ -29,10 +29,12 @@ def _empty_tasting():
         "reveal_count": 0,
         "chips": [],
         "ratings": {},  # chip id -> player id -> rating
+        "shopping": [],  # the shared shopping list before the tasting
     }
 
 
 def _upgrade(tasting):
+    tasting.setdefault("shopping", [])
     # Ratings from before the Sucht-Save stored their d20 value as "enjoyment".
     for ratings in tasting["ratings"].values():
         for rating in ratings.values():

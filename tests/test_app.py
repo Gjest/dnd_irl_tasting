@@ -362,6 +362,104 @@ class PlayerChips(Base):
             self.assertNotIn("4242", bob.get(url).get_data(as_text=True), url)
 
 
+class Shopping(Base):
+    def add(self, client, name="Ungarisch", brand="Funny-Frisch", **extra):
+        fields = {"name": name, "brand": brand, "flavor_type": "Paprika", "buyer": "me", **extra}
+        return self.post(client, "/einkauf", **fields)
+
+    def items(self):
+        return self.store.read()["shopping"]
+
+    def test_everyone_sees_the_list(self):
+        self.add(self.client("a"))
+        for uid in ("b", "admin"):
+            body = self.client(uid).get("/einkauf").get_data(as_text=True)
+            self.assertIn("Ungarisch", body)
+            self.assertIn("kauft Alice", body)
+
+    def test_exact_duplicate_is_refused(self):
+        self.add(self.client("a"))
+        self.add(self.client("b"), name=" ungarisch ", brand="funny frisch")
+        self.assertEqual(len(self.items()), 1)
+
+    def test_similar_item_is_added_with_a_warning(self):
+        self.add(self.client("a"))
+        bob = self.client("b")
+        self.add(bob, name="Ungarische Art", brand="Funny")
+        self.assertEqual(len(self.items()), 2)
+        self.assertIn("klingt wie", bob.get("/einkauf").get_data(as_text=True))
+
+    def test_wish_can_be_claimed_once(self):
+        self.add(self.client("a"), buyer="open")
+        self.post(self.client("b"), f"/einkauf/{self.items()[0]['id']}/claim")
+        self.post(self.client("c"), f"/einkauf/{self.items()[0]['id']}/claim")
+        self.assertEqual(self.items()[0]["buyer"], "b")
+
+    def test_only_the_buyer_marks_bought_or_releases(self):
+        self.add(self.client("a"))
+        item = self.items()[0]["id"]
+        bob = self.client("b")
+        self.assertEqual(self.post(bob, f"/einkauf/{item}/bought").status_code, 403)
+        self.assertEqual(self.post(bob, f"/einkauf/{item}/release").status_code, 403)
+        self.post(self.client("a"), f"/einkauf/{item}/bought")
+        self.assertTrue(self.items()[0]["bought"])
+
+    def test_wisher_cannot_strike_what_someone_else_buys(self):
+        alice = self.client("a")
+        self.add(alice, buyer="open")
+        item = self.items()[0]["id"]
+        self.post(self.client("b"), f"/einkauf/{item}/claim")
+        self.post(alice, f"/einkauf/{item}/delete")
+        self.assertEqual(len(self.items()), 1)
+        self.assertEqual(self.post(self.client("c"), f"/einkauf/{item}/delete").status_code, 403)
+        self.post(self.client("admin"), f"/einkauf/{item}/delete")
+        self.assertEqual(self.items(), [])
+
+    def test_item_becomes_a_bowl_and_stays_blind(self):
+        alice, bob = self.client("a"), self.client("b")
+        self.add(alice)
+        item = self.items()[0]["id"]
+        form = alice.get(f"/?from={item}").get_data(as_text=True)
+        self.assertIn('value="Ungarisch"', form)
+        self.post(alice, "/chips", name="Ungarisch", brand="Funny-Frisch", flavor_type="Paprika",
+                  price="2,49", weight="175", item_id=item)
+        data = self.store.read()
+        chip = data["chips"][0]
+        self.assertEqual((chip["added_by"], chip["weight"]), ("a", 175))
+        self.assertEqual((data["shopping"][0]["chip_id"], data["shopping"][0]["bought"]), (chip["id"], True))
+        self.assertIn("Schale 1", alice.get("/einkauf").get_data(as_text=True))
+        self.assertNotIn("Schale 1", bob.get("/einkauf").get_data(as_text=True))
+        # A second bowl from the same item is not possible.
+        self.assertEqual(self.post(alice, "/chips", name="x", flavor_type="BBQ", item_id=item).status_code, 403)
+
+    def test_others_cannot_set_up_my_item(self):
+        self.add(self.client("a"))
+        item = self.items()[0]["id"]
+        self.assertEqual(self.post(self.client("b"), "/chips", name="x", flavor_type="BBQ", item_id=item).status_code, 403)
+        self.assertEqual(self.store.read()["chips"], [])
+
+    def test_deleted_bowl_frees_the_item_again(self):
+        alice = self.client("a")
+        self.add(alice)
+        item = self.items()[0]["id"]
+        self.post(alice, "/chips", name="Ungarisch", flavor_type="Paprika", item_id=item)
+        self.post(alice, f"/chips/{self.store.read()['chips'][0]['id']}/delete")
+        self.assertIn(f"from={item}", alice.get("/").get_data(as_text=True))
+
+    def test_list_locks_with_the_ratings(self):
+        admin, chips = self.add_chips()
+        self.rate(self.client("a"), chips[0]["id"], 10)
+        self.post(admin, "/admin/ceremony/start")
+        self.add(self.client("b"))
+        self.assertEqual(self.items(), [])
+
+    def test_old_files_get_a_list(self):
+        path = os.path.join(self.tmp.name, "tasting.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"phase": "tasting", "chips": [], "ratings": {}}, f)
+        self.assertEqual(Store(self.tmp.name).read()["shopping"], [])
+
+
 class Cleanup(Base):
     def setUp(self):
         super().setUp()

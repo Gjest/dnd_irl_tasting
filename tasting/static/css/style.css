@@ -180,6 +180,14 @@ legend { padding: 0; font-weight: 700; margin-bottom: .4rem; }
 .spoiler-card summary small { font-weight: 400; color: var(--dust); }
 .my-chips, .entry-list { list-style: none; padding: 0; margin: .8rem 0 0; }
 .my-chips li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .3rem 1rem; padding: .55rem 0; border-bottom: 1px solid var(--line); }
+.shopping-list { list-style: none; padding: 0; margin: .6rem 0 0; }
+.shopping-list li { padding: .65rem 0; border-top: 1px solid var(--line); }
+.shopping-list .actions { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-top: .3rem; white-space: normal; }
+.shopping-list .actions form { margin: 0; }
+.shopping-mine { border-left: 3px solid var(--ember); padding-left: .7rem !important; }
+.shopping-head { display: flex; justify-content: space-between; gap: 1rem; overflow-wrap: anywhere; }
+.shopping-bowl { flex: none; color: var(--brimstone); font-weight: 700; }
+.shopping-meta { margin: .15rem 0 0; color: var(--dust); font-size: .88rem; }
 .entry-list li { padding: .65rem 0; border-top: 1px solid var(--line); }
 .entry-head { display: flex; justify-content: space-between; gap: 1rem; }
 .entry-note { margin: .3rem 0; font-style: italic; color: var(--dust); white-space: pre-wrap; overflow-wrap: anywhere; }

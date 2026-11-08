@@ -20,12 +20,30 @@
   </form>
 </section>
 {% else %}
-<details class="card add-chip">
-  <summary>Chips mitgebracht? Hier eintragen</summary>
+{% if to_set_up and not from_item %}
+<section class="card">
+  <h2>Von deiner Einkaufsliste</h2>
+  <p class="hint">Mit einem Tipp wird daraus eine Schale. Preis und Gewicht trägst du dabei nach.</p>
+  <ul class="my-chips">
+    {% for item in to_set_up %}
+    <li>
+      <span>{{ item.brand }} {{ item.name }}{% if not item.bought %} <small>(noch nicht gekauft)</small>{% endif %}</span>
+      <a href="{{ url_for('main.home', **{'from': item.id}) }}">Aufstellen</a>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+<details class="card add-chip" {% if from_item %}open{% endif %}>
+  <summary>{% if from_item %}{{ from_item.brand }} {{ from_item.name }} aufstellen{% else %}Chips mitgebracht? Hier eintragen{% endif %}</summary>
   <p class="hint">Nur du siehst, was in deiner Schale ist. Du bewertest sie mit, bekommst für sie aber keine Orakelpunkte.</p>
   <form method="post" action="{{ url_for('main.add_chip') }}" class="stack">
-    {{ chip_fields(none, flavors, csrf_token) }}
-    <button class="button button-primary" type="submit">Schale aufstellen</button>
+    {{ chip_fields(prefill, flavors, csrf_token) }}
+    {% if from_item %}<input type="hidden" name="item_id" value="{{ from_item.id }}">{% endif %}
+    <div class="button-row">
+      <button class="button button-primary" type="submit">Schale aufstellen</button>
+      {% if from_item %}<a class="button" href="{{ url_for('main.home') }}">Abbrechen</a>{% endif %}
+    </div>
   </form>
 </details>
 {% endif %}

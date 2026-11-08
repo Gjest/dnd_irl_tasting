@@ -35,10 +35,11 @@ Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_
 
 ## During the tasting
 
-1. **Before:** everyone adds the chips they brought under "Chips mitgebracht?" on their bowls page, ideally with price and bag weight so that prices compare per 100 g. Only the person who added a chip and the admin can see what's in that bowl.
-2. **Tasting:** players rate every bowl, including their own, and can change a rating until the reveal. The ranking comes from the Sucht-Save: turn the 3D d20 to how hard it is to stop eating (DC 1 to 20). On your own bowls you can't guess the flavor, brand or price. Everyone sees who is still missing which bowl, but no scores.
-3. **Reveal:** press "Enthüllung starten" and click through on the big screen. This locks ratings. "Wertung wieder öffnen" undoes it without losing anything.
-4. **After:** results, statistics and printable certificates are open to everyone.
+1. **Shopping:** under "Einkauf" everyone sees one shared list of who buys which bag. Exact duplicates are refused, and similar names get a warning. A wish without a buyer can be claimed with "Ich kaufe das". At the tasting, the buyer taps "Als Schale aufstellen" to turn the item into a bowl and adds price and weight. Only the buyer and the admin see which bowl it became until the reveal. Everyone knows which chips are in the game, so guessing the brand is easier. If players set up bowls one after another, others could match bowl numbers to the list, so press "Schalen mischen" before the first rating.
+2. **Before:** everyone adds the chips they brought under "Chips mitgebracht?" on their bowls page, ideally with price and bag weight so that prices compare per 100 g. Only the person who added a chip and the admin can see what's in that bowl.
+3. **Tasting:** players rate every bowl, including their own, and can change a rating until the reveal. The ranking comes from the Sucht-Save: turn the 3D d20 to how hard it is to stop eating (DC 1 to 20). On your own bowls you can't guess the flavor, brand or price. Everyone sees who is still missing which bowl, but no scores.
+4. **Reveal:** press "Enthüllung starten" and click through on the big screen. This locks ratings. "Wertung wieder öffnen" undoes it without losing anything.
+5. **After:** results, statistics and printable certificates are open to everyone.
 
 ## Cleaning up data
 
@@ -49,7 +50,7 @@ The Admin login can open "Datenpflege" on the admin page. It shows all ratings i
 | Notiz löschen | Removes one note and keeps the rating |
 | Wertung löschen | Removes one person's rating of one bowl |
 | Ganze Schale löschen | Removes a bowl and all its ratings |
-| Alles niederbrennen | Removes all bowls and ratings, keeps logins. Type `ASCHE` to confirm. |
+| Alles niederbrennen | Removes all bowls and ratings, keeps logins and the shopping list. Type `ASCHE` to confirm. |
 
 Each of these saves a backup to `data/backups/` first. To restore one, stop the container and copy it over `data/tasting.json`. Deleting isn't possible during a running reveal. After the reveal, the ranking updates itself.
 

@@ -43,6 +43,7 @@ bp = Blueprint("main", __name__)
 
 MAX_FIELD_LENGTH = 80
 MAX_CHIPS = 60
+MAX_SHOPPING_ITEMS = 80
 RESET_WORD = "ASCHE"
 
 
@@ -145,7 +146,17 @@ def home():
         (c for c in tasting["chips"] if c.get("added_by") == me), key=lambda c: c["bowl"]
     )
     editing = next((c for c in my_chips if c["id"] == request.args.get("edit")), None)
-    return render_template("bowls.html", my_chips=my_chips, editing=editing, flavors=FLAVOR_TYPES)
+    # Bought or planned items of mine that aren't a bowl yet, ready to be set up.
+    to_set_up = [
+        item for item in tasting["shopping"]
+        if item.get("buyer") == me and _linked_chip(tasting, item) is None
+    ]
+    from_item = next((i for i in to_set_up if i["id"] == request.args.get("from")), None)
+    prefill = {**from_item, "price": None, "weight": None} if from_item else None
+    return render_template(
+        "bowls.html", my_chips=my_chips, editing=editing, flavors=FLAVOR_TYPES,
+        to_set_up=to_set_up, from_item=from_item, prefill=prefill,
+    )
 
 
 def _progress(tasting):
@@ -462,21 +473,216 @@ def _refresh_reveal_order(data):
 @login_required
 def add_chip():
     fields, errors = _parse_chip(request.form)
+    item_id = request.form.get("item_id", "")
     if errors:
         for error in errors:
             flash(error)
-        return redirect(_home_for_user())
+        return redirect(url_for("main.home", **{"from": item_id}) if item_id and not _is_admin() else _home_for_user())
     with store().edit() as data:
         if _require_tasting_phase(data):
+            item = None
+            if item_id:
+                item = _find_item(data, item_id)
+                if item.get("buyer") != g.user["id"] or _linked_chip(data, item):
+                    abort(403)
             if len(data["chips"]) >= MAX_CHIPS:
                 flash(f"Mehr als {MAX_CHIPS} Schalen überlebt niemand.")
             else:
                 bowl = max((c["bowl"] for c in data["chips"]), default=0) + 1
+                chip_id = secrets.token_hex(4)
                 data["chips"].append(
-                    {"id": secrets.token_hex(4), "bowl": bowl, "added_by": g.user["id"], **fields}
+                    {"id": chip_id, "bowl": bowl, "added_by": g.user["id"], **fields}
                 )
+                if item:
+                    item.update(chip_id=chip_id, bought=True)
                 flash(f"Deine Chips stehen jetzt in Schale {bowl}.")
     return redirect(_home_for_user())
+
+
+# --- Shopping list -------------------------------------------------------
+# Everyone sees what's on the list and who buys it, which is the point: no two
+# people bring the same bag. Which bowl an item became stays with its buyer and
+# the admin until the reveal.
+
+
+def _find_item(data, item_id):
+    for item in data["shopping"]:
+        if item["id"] == item_id:
+            return item
+    abort(404)
+
+
+def _linked_chip(data, item):
+    # A deleted bowl leaves the item as if it had never been set up.
+    return next((c for c in data["chips"] if c["id"] == item.get("chip_id")), None)
+
+
+def _shopping_key(brand, name):
+    return f"{stats.normalize_text(brand)}|{stats.normalize_text(name)}"
+
+
+def _similar_item(data, brand, name, flavor):
+    """An item that is probably the same bag under a different spelling."""
+    wanted = f"{stats.normalize_text(brand)} {stats.normalize_text(name)}"
+    for item in data["shopping"]:
+        same_brand_flavor = (
+            flavor and item.get("flavor_type") == flavor
+            and brand and stats.brand_matches(brand, item.get("brand"))
+        )
+        other = f"{stats.normalize_text(item.get('brand'))} {stats.normalize_text(item['name'])}"
+        if same_brand_flavor or stats.similar(wanted, other):
+            return item
+    return None
+
+
+def _item_label(item):
+    return stats.chip_label(item)
+
+
+@bp.get("/einkauf")
+@login_required
+def shopping():
+    tasting = store().read()
+    names = _display_names()
+    me = g.user["id"]
+    revealed = tasting["phase"] == "revealed"
+    items = []
+    for item in tasting["shopping"]:
+        chip = _linked_chip(tasting, item)
+        may_see_bowl = revealed or _is_admin() or item.get("buyer") == me
+        items.append({
+            **item,
+            "label": _item_label(item),
+            "creator_name": names.get(item.get("creator"), "unbekannt"),
+            "buyer_name": names.get(item.get("buyer")) if item.get("buyer") else None,
+            "bowl": chip["bowl"] if chip and may_see_bowl else None,
+            "set_up": bool(chip) and may_see_bowl,
+            "mine": item.get("buyer") == me,
+            "may_delete": _is_admin() or me in (item.get("creator"), item.get("buyer")),
+        })
+    groups = [
+        ("Sucht noch jemanden", [i for i in items if not i.get("buyer")]),
+        ("Wird gekauft", [i for i in items if i.get("buyer") and not i.get("bought")]),
+        ("Im Rucksack", [i for i in items if i.get("buyer") and i.get("bought")]),
+    ]
+    return render_template(
+        "shopping.html", groups=groups, count=len(items), flavors=FLAVOR_TYPES,
+        open_phase=tasting["phase"] == "tasting", is_player=g.user["role"] == "player",
+    )
+
+
+@bp.post("/einkauf")
+@login_required
+def add_item():
+    name = request.form.get("name", "").strip()[:MAX_FIELD_LENGTH]
+    brand = request.form.get("brand", "").strip()[:MAX_FIELD_LENGTH]
+    flavor = request.form.get("flavor_type", "")
+    flavor = flavor if flavor in FLAVOR_TYPES else ""
+    if not name:
+        flash("Was soll denn gekauft werden? Der Name fehlt.")
+        return redirect(url_for("main.shopping"))
+    with store().edit() as data:
+        if not _require_tasting_phase(data):
+            return redirect(url_for("main.shopping"))
+        if len(data["shopping"]) >= MAX_SHOPPING_ITEMS:
+            flash(f"Mehr als {MAX_SHOPPING_ITEMS} Tüten trägt kein Packesel.")
+            return redirect(url_for("main.shopping"))
+        key = _shopping_key(brand, name)
+        twin = next((i for i in data["shopping"] if _shopping_key(i.get("brand"), i["name"]) == key), None)
+        if twin:
+            flash(f"{_item_label(twin)} steht schon auf der Liste. Doppelt kauft nur ein Mimik.")
+            return redirect(url_for("main.shopping"))
+        similar = _similar_item(data, brand, name, flavor)
+        buyer = g.user["id"] if request.form.get("buyer") == "me" and g.user["role"] == "player" else None
+        data["shopping"].append({
+            "id": secrets.token_hex(4),
+            "name": name,
+            "brand": brand,
+            "flavor_type": flavor,
+            "own_brand": request.form.get("own_brand") == "on",
+            "creator": g.user["id"],
+            "buyer": buyer,
+            "bought": False,
+            "chip_id": None,
+        })
+        if similar:
+            flash(f"Eingetragen. Achtung, das klingt wie {_item_label(similar)}, das schon auf der Liste steht.")
+        else:
+            flash("Eingetragen.")
+    return redirect(url_for("main.shopping"))
+
+
+def _change_item(item_id, change):
+    """Runs `change(data, item)` on one item during the tasting, then back to the list."""
+    if g.user["role"] != "player" and change is not _delete_item:
+        abort(403)
+    with store().edit() as data:
+        item = _find_item(data, item_id)
+        if _require_tasting_phase(data):
+            change(data, item)
+    return redirect(url_for("main.shopping"))
+
+
+def _claim_item(data, item):
+    if item.get("buyer"):
+        flash("Das kauft schon jemand.")
+    else:
+        item["buyer"] = g.user["id"]
+        flash(f"Du kaufst {_item_label(item)}.")
+
+
+def _release_item(data, item):
+    if item.get("buyer") != g.user["id"]:
+        abort(403)
+    if _linked_chip(data, item):
+        flash("Das steht schon als Schale auf dem Tisch.")
+        return
+    item.update(buyer=None, bought=False)
+    flash("Freigegeben. Jetzt darf jemand anderes.")
+
+
+def _toggle_bought(data, item):
+    if item.get("buyer") != g.user["id"]:
+        abort(403)
+    if _linked_chip(data, item):
+        flash("Das steht schon als Schale auf dem Tisch.")
+        return
+    item["bought"] = not item.get("bought")
+
+
+def _delete_item(data, item):
+    if not _is_admin() and g.user["id"] not in (item.get("creator"), item.get("buyer")):
+        abort(403)
+    # Somebody else already promised to buy it, so only they or the admin can drop it.
+    if not _is_admin() and item.get("buyer") not in (None, g.user["id"]):
+        flash("Das kauft schon jemand anderes. Nur diese Person oder der Admin kann es streichen.")
+        return
+    data["shopping"].remove(item)
+    flash(f"{_item_label(item)} ist von der Liste gestrichen. Die Schale bleibt, falls es eine gibt.")
+
+
+@bp.post("/einkauf/<item_id>/claim")
+@login_required
+def claim_item(item_id):
+    return _change_item(item_id, _claim_item)
+
+
+@bp.post("/einkauf/<item_id>/release")
+@login_required
+def release_item(item_id):
+    return _change_item(item_id, _release_item)
+
+
+@bp.post("/einkauf/<item_id>/bought")
+@login_required
+def toggle_bought(item_id):
+    return _change_item(item_id, _toggle_bought)
+
+
+@bp.post("/einkauf/<item_id>/delete")
+@login_required
+def delete_item(item_id):
+    return _change_item(item_id, _delete_item)
 
 
 def _chip_for_change(data, chip_id):
@@ -602,7 +808,7 @@ def admin_reset():
     store().snapshot()
     with store().edit() as data:
         data.update(chips=[], ratings={}, phase="tasting", ceremony_order=[], reveal_count=0)
-    flash("Alles liegt in Asche. Eine Sicherung ist in data/backups.")
+    flash("Alles liegt in Asche. Die Einkaufsliste bleibt. Eine Sicherung ist in data/backups.")
     return redirect(url_for("main.admin"))
 
 
