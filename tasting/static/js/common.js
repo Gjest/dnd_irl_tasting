@@ -32,6 +32,30 @@ async function postJson(url) {
   return response.json();
 }
 
+// Photo fields: a preview of the picked photo, and only one of the two inputs filled.
+for (const picker of document.querySelectorAll(".photo-picker")) {
+  const inputs = [...picker.querySelectorAll(".photo-input")];
+  const preview = picker.querySelector(".photo-preview");
+  const image = preview.querySelector("img");
+  const clear = () => {
+    for (const input of inputs) input.value = "";
+    if (image.src) URL.revokeObjectURL(image.src);
+    image.removeAttribute("src");
+    preview.hidden = true;
+  };
+  for (const input of inputs) {
+    input.addEventListener("change", () => {
+      const file = input.files[0];
+      for (const other of inputs) if (other !== input) other.value = "";
+      if (!file) return clear();
+      if (image.src) URL.revokeObjectURL(image.src);
+      image.src = URL.createObjectURL(file);
+      preview.hidden = false;
+    });
+  }
+  picker.querySelector(".photo-clear").addEventListener("click", clear);
+}
+
 document.addEventListener("submit", (event) => {
   const question = event.target.dataset && event.target.dataset.confirm;
   if (question && !window.confirm(question)) event.preventDefault();

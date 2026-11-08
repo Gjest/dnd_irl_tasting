@@ -618,6 +618,15 @@ class Photos(Base):
         self.post(alice, f"/chips/{chip['id']}", flavor_type="BBQ", brand="Chio", remove_image="on")
         self.assertEqual(self.images(), [])
 
+    def test_camera_and_file_buttons_both_work(self):
+        alice = self.client("a")
+        for files in ([(io.BytesIO(b""), ""), (io.BytesIO(photo_bytes()), "kamera.jpg")],
+                      [(io.BytesIO(photo_bytes()), "datei.png"), (io.BytesIO(b""), "")]):
+            alice.post("/chips", data={"csrf_token": self.token(alice), "flavor_type": "BBQ", "brand": "Chio",
+                                       "image": files}, content_type="multipart/form-data")
+        self.assertTrue(all(c["image"] for c in self.store.read()["chips"]))
+        self.assertEqual(len(self.images()), 2)
+
     def test_bad_names_are_not_served(self):
         alice = self.client("a")
         for name in ("../users.json", "secret.key", "abc.jpg"):

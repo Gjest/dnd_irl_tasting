@@ -17,7 +17,7 @@ MAX_FAILS_GLOBAL = 60
 FAIL_WINDOW_SECONDS = 300
 
 CSP = (
-    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; "
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; "
     "font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; "
     "frame-ancestors 'none'"
 )
