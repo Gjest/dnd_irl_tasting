@@ -35,6 +35,10 @@ def _empty_tasting():
 
 def _upgrade(tasting):
     tasting.setdefault("shopping", [])
+    # List items from before photos and full bowl details lack these fields.
+    for item in tasting["shopping"]:
+        for key in ("price", "weight", "image"):
+            item.setdefault(key, None)
     # Ratings from before the Sucht-Save stored their d20 value as "enjoyment".
     for ratings in tasting["ratings"].values():
         for rating in ratings.values():

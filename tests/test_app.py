@@ -471,6 +471,20 @@ class Shopping(Base):
         self.add(self.client("b"))
         self.assertEqual(self.items(), [])
 
+    def test_items_from_the_first_list_version_still_show(self):
+        path = os.path.join(self.tmp.name, "tasting.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"phase": "tasting", "chips": [], "ratings": {}, "shopping": [{
+                "id": "i1", "name": "Ungarisch", "brand": "Funny-Frisch", "flavor_type": "Paprika",
+                "own_brand": False, "creator": "a", "buyer": "a", "bought": False, "chip_id": None,
+            }]}, f)
+        self.app = create_app(self.tmp.name)
+        self.store = self.app.extensions["store"]
+        alice = self.client("a")
+        self.assertEqual(alice.get("/einkauf").status_code, 200)
+        self.assertEqual(alice.get("/einkauf?edit=i1").status_code, 200)
+        self.assertEqual(alice.get("/?from=i1").status_code, 200)
+
     def test_old_files_get_a_list(self):
         path = os.path.join(self.tmp.name, "tasting.json")
         with open(path, "w", encoding="utf-8") as f:
