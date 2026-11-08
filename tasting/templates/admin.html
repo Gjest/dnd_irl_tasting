@@ -38,7 +38,7 @@
 {% if editing %}
 <section class="card">
   <h2>Schale {{ editing.bowl }} bearbeiten</h2>
-  <form method="post" action="{{ url_for('main.update_chip', chip_id=editing.id) }}" class="stack">
+  <form method="post" action="{{ url_for('main.update_chip', chip_id=editing.id) }}" class="stack" enctype="multipart/form-data">
     {{ chip_fields(editing, flavors, csrf_token) }}
     <div class="button-row">
       <button class="button button-primary" type="submit">Speichern</button>
@@ -49,7 +49,7 @@
 {% elif tasting.phase == 'tasting' %}
 <section class="card">
   <h2>Neue Schale</h2>
-  <form method="post" action="{{ url_for('main.add_chip') }}" class="stack">
+  <form method="post" action="{{ url_for('main.add_chip') }}" class="stack" enctype="multipart/form-data">
     {{ chip_fields(none, flavors, csrf_token) }}
     <button class="button button-primary" type="submit">Schale anlegen</button>
   </form>
@@ -75,7 +75,7 @@
       {% for chip in chips %}
         <tr>
           <td>{{ chip.bowl }}</td>
-          <td>{{ chip.brand }} {{ chip.name }}{% if chip.own_brand %} <small>(Eigenmarke)</small>{% endif %}</td>
+          <td>{{ chip|chip_label }}{% if chip.own_brand %} <small>(Eigenmarke)</small>{% endif %}</td>
           <td>{{ adders.get(chip.added_by, '–') }}</td>
           <td>{{ chip.flavor_type }}</td>
           <td class="num">{{ ('%.2f'|format(chip.price)|replace('.', ',')) ~ ' €' if chip.price is not none else '–' }}</td>

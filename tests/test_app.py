@@ -1,10 +1,13 @@
 """End-to-end checks of the rules that matter: blindness, security, persistence, stats."""
 
+import io
 import json
 import os
 import re
 import tempfile
 import unittest
+
+from PIL import Image
 
 from tasting import create_app, security, stats
 from tasting.catalog import SCALE_KEYS
@@ -12,6 +15,16 @@ from tasting.manage import main as manage_main
 from tasting.store import Store
 
 PASS = "test-pass-phrase-111"
+
+
+def photo_bytes(fmt="PNG", size=(40, 30), exif=None):
+    buffer = io.BytesIO()
+    image = Image.new("RGB", size, (200, 120, 30))
+    if exif:
+        image.save(buffer, fmt, exif=exif)
+    else:
+        image.save(buffer, fmt)
+    return buffer.getvalue()
 
 
 def add_user(store, uid, name, role="player"):
@@ -44,6 +57,11 @@ class Base(unittest.TestCase):
 
     def post(self, client, url, **fields):
         return client.post(url, data={"csrf_token": self.token(client), **fields})
+
+    def upload(self, client, url, data=None, fmt="PNG", **fields):
+        photo = (io.BytesIO(data if data is not None else photo_bytes(fmt)), "tuete.png")
+        return client.post(url, data={"csrf_token": self.token(client), "image": photo, **fields},
+                           content_type="multipart/form-data")
 
     def add_chips(self):
         admin = self.client("admin")
@@ -458,6 +476,145 @@ class Shopping(Base):
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"phase": "tasting", "chips": [], "ratings": {}}, f)
         self.assertEqual(Store(self.tmp.name).read()["shopping"], [])
+
+
+class ListDetails(Base):
+    def test_name_is_optional_when_brand_and_flavor_say_enough(self):
+        alice = self.client("a")
+        self.post(alice, "/chips", brand="Pringles", flavor_type="Paprika")
+        chip = self.store.read()["chips"][0]
+        self.assertEqual(stats.chip_label(chip), "Pringles Paprika")
+        self.post(alice, "/chips", flavor_type="BBQ")
+        self.assertEqual(len(self.store.read()["chips"]), 1)
+
+    def test_complete_item_becomes_a_bowl_in_one_step(self):
+        alice = self.client("a")
+        self.post(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", price="2,99", weight="165", buyer="me")
+        item = self.store.read()["shopping"][0]
+        self.post(alice, f"/einkauf/{item['id']}/setup")
+        data = self.store.read()
+        chip = data["chips"][0]
+        self.assertEqual((chip["brand"], chip["flavor_type"], chip["price"], chip["weight"]), ("Pringles", "Paprika", 2.99, 165))
+        self.assertEqual(data["shopping"][0]["chip_id"], chip["id"])
+
+    def test_incomplete_item_opens_the_filled_form(self):
+        alice = self.client("a")
+        self.post(alice, "/einkauf", name="Irgendwas mit Trüffel", buyer="me")
+        item = self.store.read()["shopping"][0]
+        response = self.post(alice, f"/einkauf/{item['id']}/setup")
+        self.assertIn(f"from={item['id']}", response.headers["Location"])
+        self.assertEqual(self.store.read()["chips"], [])
+
+    def test_price_on_the_list_stays_with_the_buyer(self):
+        alice = self.client("a")
+        self.post(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", price="4,27", buyer="me")
+        self.assertIn("4,27", alice.get("/einkauf").get_data(as_text=True))
+        self.assertNotIn("4,27", self.client("b").get("/einkauf").get_data(as_text=True))
+
+    def test_different_flavors_of_one_brand_are_no_duplicates(self):
+        self.post(self.client("a"), "/einkauf", brand="Pringles", flavor_type="Paprika")
+        self.post(self.client("b"), "/einkauf", brand="Pringles", flavor_type="Sour Cream & Zwiebel")
+        self.post(self.client("c"), "/einkauf", brand="pringles", flavor_type="Paprika")
+        self.assertEqual(len(self.store.read()["shopping"]), 2)
+
+    def test_item_can_be_edited_until_it_is_a_bowl(self):
+        alice = self.client("a")
+        self.post(alice, "/einkauf", brand="Pringles", buyer="me")
+        item = self.store.read()["shopping"][0]["id"]
+        self.post(alice, f"/einkauf/{item}", brand="Pringles", flavor_type="Paprika", weight="165")
+        self.assertEqual(self.store.read()["shopping"][0]["flavor_type"], "Paprika")
+        self.assertEqual(self.post(self.client("b"), f"/einkauf/{item}", brand="Gehackt").status_code, 403)
+        self.post(alice, f"/einkauf/{item}/setup")
+        self.post(alice, f"/einkauf/{item}", brand="Später")
+        self.assertEqual(self.store.read()["shopping"][0]["brand"], "Pringles")
+
+
+class Photos(Base):
+    def images(self):
+        return sorted(os.listdir(os.path.join(self.tmp.name, "images")))
+
+    def test_photo_is_reencoded_without_exif(self):
+        alice = self.client("a")
+        exif = Image.Exif()
+        exif[0x010F] = "Spionagekamera"  # Make
+        response = self.upload(alice, "/chips", data=photo_bytes("JPEG", exif=exif), flavor_type="BBQ", brand="Chio")
+        self.assertEqual(response.status_code, 302)
+        chip = self.store.read()["chips"][0]
+        self.assertEqual(self.images(), [chip["image"]])
+        served = alice.get(f"/bild/{chip['image']}")
+        self.assertEqual(served.mimetype, "image/jpeg")
+        self.assertNotIn(b"Spionagekamera", served.data)
+        self.assertFalse(Image.open(io.BytesIO(served.data)).getexif())
+
+    def test_non_images_are_refused(self):
+        alice = self.client("a")
+        for data in (b"<svg onload=alert(1)>", b"GIF89a" + b"x" * 50, b""):
+            self.upload(alice, "/chips", data=data, flavor_type="BBQ", brand="Chio")
+        gif = io.BytesIO()
+        Image.new("RGB", (5, 5)).save(gif, "GIF")
+        self.upload(alice, "/chips", data=gif.getvalue(), flavor_type="BBQ", brand="Chio")
+        self.assertEqual(self.store.read()["chips"], [])
+        self.assertEqual(self.images(), [])
+        # A form sent without choosing a file is fine and just has no photo.
+        alice.post("/chips", data={"csrf_token": self.token(alice), "flavor_type": "BBQ", "brand": "Chio",
+                                   "image": (io.BytesIO(b""), "")}, content_type="multipart/form-data")
+        self.assertEqual([c.get("image") for c in self.store.read()["chips"]], [None])
+
+    def test_oversized_upload_is_rejected_but_photos_pass_the_small_limit(self):
+        alice = self.client("a")
+        big = photo_bytes("PNG", size=(400, 300))
+        self.assertGreater(len(big) + 70000, 64 * 1024)
+        response = self.upload(alice, "/chips", data=big + b"\0" * 70000, flavor_type="BBQ", brand="Chio")
+        self.assertEqual(response.status_code, 302)
+        too_big = b"\0" * (13 * 1024 * 1024)
+        self.assertEqual(self.upload(alice, "/chips", data=too_big, flavor_type="BBQ").status_code, 413)
+
+    def test_bowl_photo_is_blind_until_the_reveal(self):
+        admin = self.client("admin")
+        alice, bob = self.client("a"), self.client("b")
+        self.upload(alice, "/chips", flavor_type="BBQ", brand="Chio")
+        name = self.store.read()["chips"][0]["image"]
+        self.assertEqual(bob.get(f"/bild/{name}").status_code, 404)
+        self.assertEqual(admin.get(f"/bild/{name}").status_code, 200)
+        self.rate(bob, self.store.read()["chips"][0]["id"], 10)
+        self.post(admin, "/admin/ceremony/start")
+        self.assertEqual(bob.get(f"/bild/{name}").status_code, 404)
+        admin.post("/api/ceremony/next", headers={"X-CSRF-Token": self.token(admin)})
+        self.assertEqual(bob.get(f"/bild/{name}").status_code, 200)
+
+    def test_list_photo_is_public_and_moves_to_the_bowl(self):
+        alice = self.client("a")
+        self.upload(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", buyer="me")
+        item = self.store.read()["shopping"][0]
+        self.assertEqual(self.client("b").get(f"/bild/{item['image']}").status_code, 200)
+        self.post(alice, f"/einkauf/{item['id']}/setup")
+        self.assertEqual(self.store.read()["chips"][0]["image"], item["image"])
+        # Striking the item keeps the photo, the bowl still uses it.
+        self.post(alice, f"/einkauf/{item['id']}/delete")
+        self.assertEqual(self.images(), [item["image"]])
+        self.assertEqual(self.client("b").get(f"/bild/{item['image']}").status_code, 404)
+
+    def test_replaced_and_deleted_photos_are_removed(self):
+        alice = self.client("a")
+        self.upload(alice, "/chips", flavor_type="BBQ", brand="Chio")
+        chip = self.store.read()["chips"][0]
+        self.upload(alice, f"/chips/{chip['id']}", flavor_type="BBQ", brand="Chio")
+        new = self.store.read()["chips"][0]["image"]
+        self.assertEqual(self.images(), [new])
+        self.post(alice, f"/chips/{chip['id']}", flavor_type="BBQ", brand="Chio", remove_image="on")
+        self.assertEqual(self.images(), [])
+
+    def test_bad_names_are_not_served(self):
+        alice = self.client("a")
+        for name in ("../users.json", "secret.key", "abc.jpg"):
+            self.assertEqual(alice.get(f"/bild/{name}").status_code, 404)
+
+    def test_failed_upload_leaves_no_file(self):
+        admin, chips = self.add_chips()
+        self.rate(self.client("a"), chips[0]["id"], 10)
+        self.post(admin, "/admin/ceremony/start")
+        self.upload(self.client("b"), "/chips", flavor_type="BBQ", brand="Chio")
+        self.assertEqual(self.images(), [])
 
 
 class Cleanup(Base):

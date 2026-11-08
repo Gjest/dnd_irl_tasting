@@ -6,10 +6,12 @@ from urllib.parse import urlsplit
 
 from flask import Flask, abort, g, request, session
 
-from . import security
+from . import images, security
 from .store import Store
 
 MAX_REQUEST_BYTES = 64 * 1024
+# Only these forms carry a photo. Everything else keeps the small limit.
+UPLOAD_ENDPOINTS = {"main.add_chip", "main.update_chip", "main.add_item", "main.update_item"}
 
 
 def _allowed_host():
@@ -39,6 +41,8 @@ def create_app(data_dir=None):
     def check_request():
         if request.endpoint == "main.healthz":
             return
+        if request.endpoint in UPLOAD_ENDPOINTS:
+            request.max_content_length = images.MAX_UPLOAD_BYTES
         # Host check: stops DNS rebinding from turning a malicious website into
         # a path into this LAN-only app.
         if allowed_host and request.host.rsplit(":", 1)[0].lower() != allowed_host:

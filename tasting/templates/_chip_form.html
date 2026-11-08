@@ -1,12 +1,13 @@
-{% macro chip_fields(chip, flavors, csrf_token) %}
+{% macro chip_fields(chip, flavors, csrf_token, flavor_required=True) %}
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <label class="field"><span>Name</span>
-    <input type="text" name="name" required maxlength="80" value="{{ chip.name if chip else '' }}" placeholder="z. B. Ungarisch"></label>
-  <label class="field"><span>Marke</span>
-    <input type="text" name="brand" maxlength="80" value="{{ chip.brand if chip else '' }}" placeholder="Hersteller oder Supermarkt"></label>
-  <label class="field"><span>Geschmacksrichtung</span>
-    <select name="flavor_type" required>
-      <option value="">Auswählen …</option>
+  <label class="field"><span>Marke (optional)</span>
+    <input type="text" name="brand" maxlength="80" value="{{ chip.brand if chip else '' }}" placeholder="z. B. Pringles oder Hersteller"></label>
+  <label class="field"><span>Name (optional)</span>
+    <input type="text" name="name" maxlength="80" value="{{ chip.name if chip else '' }}" placeholder="z. B. Ungarisch"></label>
+  <p class="hint">Name oder Marke reicht. Bei „Pringles“ und „Paprika“ braucht es keinen Namen.</p>
+  <label class="field"><span>Geschmacksrichtung{% if not flavor_required %} (optional){% endif %}</span>
+    <select name="flavor_type" {% if flavor_required %}required{% endif %}>
+      <option value="">{% if flavor_required %}Auswählen …{% else %}Weiß ich noch nicht{% endif %}</option>
       {% for flavor in flavors %}
       <option {% if chip and chip.flavor_type == flavor %}selected{% endif %}>{{ flavor }}</option>
       {% endfor %}
@@ -17,4 +18,12 @@
     <input type="text" name="weight" inputmode="decimal" maxlength="6" value="{{ '%g'|format(chip.weight) if chip and chip.weight else '' }}" placeholder="175"></label>
   <p class="hint">Mit Preis und Gewicht wird fair verglichen, egal wie groß die Tüte ist.</p>
   <label class="check"><input type="checkbox" name="own_brand" {% if chip and chip.own_brand %}checked{% endif %}> Eigenmarke (No-Name)</label>
+  <label class="field"><span>Foto der Tüte (optional)</span>
+    <input type="file" name="image" accept="image/jpeg,image/png,image/webp"></label>
+  {% if chip and chip.image %}
+  <div class="photo-current">
+    <img class="thumb" src="{{ url_for('main.photo', name=chip.image) }}" alt="Aktuelles Foto" width="72" height="72">
+    <label class="check"><input type="checkbox" name="remove_image"> Foto entfernen</label>
+  </div>
+  {% endif %}
 {% endmacro %}

@@ -180,6 +180,14 @@ legend { padding: 0; font-weight: 700; margin-bottom: .4rem; }
 .spoiler-card summary small { font-weight: 400; color: var(--dust); }
 .my-chips, .entry-list { list-style: none; padding: 0; margin: .8rem 0 0; }
 .my-chips li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .3rem 1rem; padding: .55rem 0; border-bottom: 1px solid var(--line); }
+input[type=file] { width: 100%; padding: .5rem 0; color: var(--dust); font: 400 .95rem Lato, sans-serif; }
+input[type=file]::file-selector-button { margin-right: .7rem; padding: .55rem .9rem; font: 700 .95rem Lato, sans-serif; color: var(--bone); background: var(--char); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.thumb { display: block; width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--char); }
+.thumb-small { flex: none; width: 40px; height: 40px; }
+.photo-current { display: flex; align-items: center; gap: .8rem; }
+.with-thumb { display: flex; align-items: center; gap: .6rem; min-width: 0; }
+.reveal-photo { display: block; width: 100%; max-width: 240px; aspect-ratio: 4 / 3; object-fit: cover; margin-bottom: .5rem; border-radius: 8px; }
+.sheet-photo { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; margin-bottom: .6rem; border-radius: 6px; }
 .shopping-list { list-style: none; padding: 0; margin: .6rem 0 0; }
 .shopping-list li { padding: .65rem 0; border-top: 1px solid var(--line); }
 .shopping-list .actions { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-top: .3rem; white-space: normal; }

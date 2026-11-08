@@ -14,6 +14,12 @@ function card(chip, isNew) {
   if (isNew) item.classList.add("reveal-new");
   item.append(el("span", "reveal-place", chip.place === 1 ? "♛" : `${chip.place}.`));
   const name = el("div");
+  if (chip.image) {
+    const photo = el("img", "reveal-photo");
+    photo.src = `/bild/${encodeURIComponent(chip.image)}`;
+    photo.alt = "";
+    name.append(photo);
+  }
   name.append(el("span", "reveal-name", chip.label));
   name.append(el("span", "reveal-meta", `Schale ${chip.bowl} · ${chip.flavor_type}`));
   item.append(name);

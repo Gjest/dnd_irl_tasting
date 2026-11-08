@@ -375,6 +375,12 @@ function renderSheets() {
   const grid = el("div", "person-grid");
   for (const chip of data.chips.filter((c) => c.dc !== null)) {
     const card = el("article", "person");
+    if (chip.image) {
+      const photo = el("img", "sheet-photo");
+      photo.src = `/bild/${encodeURIComponent(chip.image)}`;
+      photo.alt = "";
+      card.append(photo);
+    }
     card.append(el("h3", "", chip.label));
     card.append(el("p", "hint", `Sucht-Save DC ${fmt(chip.dc)}: ${chip.tier.name}. ${chip.tier.line}`));
     const sheet = el("div", "sheet");

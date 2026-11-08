@@ -60,10 +60,12 @@ class Store:
         self.tasting_path = self.data_dir / "tasting.json"
         self.users_path = self.data_dir / "users.json"
         self.backup_dir = self.data_dir / "backups"
+        self.images_dir = self.data_dir / "images"
         self._lock = threading.RLock()
         self._last_backup = 0.0
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(exist_ok=True)
+        self.images_dir.mkdir(exist_ok=True)
         # A corrupt file raises here on purpose: better to refuse to start than
         # to silently overwrite ratings with an empty tasting.
         if self.tasting_path.exists():

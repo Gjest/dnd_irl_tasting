@@ -35,8 +35,8 @@ Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_
 
 ## During the tasting
 
-1. **Shopping:** under "Einkauf" everyone sees one shared list of who buys which bag. Exact duplicates are refused, and similar names get a warning. A wish without a buyer can be claimed with "Ich kaufe das". At the tasting, the buyer taps "Als Schale aufstellen" to turn the item into a bowl and adds price and weight. Only the buyer and the admin see which bowl it became until the reveal. Everyone knows which chips are in the game, so guessing the brand is easier. If players set up bowls one after another, others could match bowl numbers to the list, so press "Schalen mischen" before the first rating.
-2. **Before:** everyone adds the chips they brought under "Chips mitgebracht?" on their bowls page, ideally with price and bag weight so that prices compare per 100 g. Only the person who added a chip and the admin can see what's in that bowl.
+1. **Shopping:** under "Einkauf" everyone sees one shared list of who buys which bag. Exact duplicates are refused, and similar names get a warning. A wish without a buyer can be claimed with "Ich kaufe das". An item takes everything a bowl needs, including price, weight and a photo. Price and weight stay visible only to the buyer and the admin. If brand or name and the flavor are filled in, "Als Schale aufstellen" turns the item into a bowl in one tap. Otherwise the bowl form opens with everything filled in. Only the buyer and the admin see which bowl it became until the reveal. Everyone knows which chips are in the game, so guessing the brand is easier. If players set up bowls one after another, others could match bowl numbers to the list, so press "Schalen mischen" before the first rating.
+2. **Before:** everyone adds the chips they brought under "Chips mitgebracht?" on their bowls page, ideally with price and bag weight so that prices compare per 100 g. A name is optional: "Pringles" plus "Paprika" is enough. Only the person who added a chip and the admin can see what's in that bowl.
 3. **Tasting:** players rate every bowl, including their own, and can change a rating until the reveal. The ranking comes from the Sucht-Save: turn the 3D d20 to how hard it is to stop eating (DC 1 to 20). On your own bowls you can't guess the flavor, brand or price. Everyone sees who is still missing which bowl, but no scores.
 4. **Reveal:** press "Enthüllung starten" and click through on the big screen. This locks ratings. "Wertung wieder öffnen" undoes it without losing anything.
 5. **After:** results, statistics and printable certificates are open to everyone.
@@ -79,6 +79,7 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | File | Content |
 |---|---|
 | `data/tasting.json` | Chips and all ratings, plain JSON |
+| `data/images/` | Photos of bags, re-encoded as JPEG |
 | `data/backups/` | A copy at most every 5 minutes while data changes, last 100 kept |
 | `data/users.json` | Names and passphrase hashes |
 | `data/secret.key` | Signs the login cookies. Deleting it logs everyone out. |
@@ -92,6 +93,7 @@ To change what gets rated, edit `tasting/catalog.py` and run `docker compose up 
 - **LAN only:** the port is published on the WLAN IP alone. Don't add port forwarding on your router. Docker's published ports bypass `ufw`, so `ufw` rules would not protect this port.
 - **Logins:** random passphrases hashed with scrypt, 6 failed tries per person and device per 5 minutes, 60 overall.
 - **Web:** CSRF tokens on every POST, `HttpOnly` and `SameSite=Strict` cookies, a strict Content Security Policy with no inline scripts, host header check, 64 KB request limit.
+- **Photos:** only JPEG, PNG and WebP up to 12 MB. The app decodes each one and saves a fresh JPEG under a random name, which drops EXIF data such as the phone's GPS position. Before the reveal, a bowl's photo is only shown to whoever brought it and the admin.
 - **Offline:** fonts and Chart.js are bundled, so the pages make no outside requests.
 - **Container:** non-root, read-only filesystem, all capabilities dropped, no privilege escalation, memory and process limits. Only `./data` is writable.
 

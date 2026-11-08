@@ -34,7 +34,9 @@ def euro(value):
 
 
 def chip_label(chip):
-    return f"{chip['brand']} {chip['name']}".strip() if chip.get("brand") else chip["name"]
+    # Without a name of its own, "Pringles" plus its flavor says what it is.
+    parts = [chip.get("brand"), chip.get("name") or chip.get("flavor_type")]
+    return " ".join(p.strip() for p in parts if p and p.strip()) or "Unbenannte Tüte"
 
 
 def normalize_text(text):
@@ -154,6 +156,7 @@ def _chip_stats(chip, ratings):
         "brand": chip.get("brand", ""),
         "flavor_type": chip.get("flavor_type", ""),
         "own_brand": bool(chip.get("own_brand")),
+        "image": chip.get("image"),
         "price": chip.get("price"),
         "weight": chip.get("weight"),
         "price_100g": price_per_100g(chip),

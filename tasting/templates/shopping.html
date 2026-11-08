@@ -1,25 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Einkauf · Blutkrieg der Chips{% endblock %}
+{% from "_chip_form.html" import chip_fields %}
 {% block content %}
 <p class="eyebrow">Vorbereitung für den Abstieg</p>
 <h1>Die Einkaufsliste</h1>
 <p class="lead">Wer bringt was mit? Alle sehen diese Liste, damit keine Tüte doppelt auf dem Tisch landet. Welche Schale daraus wird, sieht nur, wer sie kauft.</p>
 
-{% if open_phase %}
+{% if editing %}
+<section class="card">
+  <h2>{{ editing.label }} bearbeiten</h2>
+  <form method="post" action="{{ url_for('main.update_item', item_id=editing.id) }}" class="stack" enctype="multipart/form-data">
+    {{ chip_fields(editing, flavors, csrf_token, flavor_required=False) }}
+    <div class="button-row">
+      <button class="button button-primary" type="submit">Speichern</button>
+      <a class="button" href="{{ url_for('main.shopping') }}">Abbrechen</a>
+    </div>
+  </form>
+</section>
+{% elif open_phase %}
 <details class="card add-chip" {% if not count %}open{% endif %}>
   <summary>Etwas auf die Liste setzen</summary>
-  <form method="post" action="{{ url_for('main.add_item') }}" class="stack">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label class="field"><span>Was?</span>
-      <input type="text" name="name" required maxlength="80" placeholder="z. B. Ungarisch"></label>
-    <label class="field"><span>Marke (optional)</span>
-      <input type="text" name="brand" maxlength="80" placeholder="Hersteller oder Supermarkt"></label>
-    <label class="field"><span>Geschmacksrichtung (optional)</span>
-      <select name="flavor_type">
-        <option value="">Weiß ich noch nicht</option>
-        {% for flavor in flavors %}<option>{{ flavor }}</option>{% endfor %}
-      </select></label>
-    <label class="check"><input type="checkbox" name="own_brand"> Eigenmarke (No-Name)</label>
+  <p class="hint">Trag am besten gleich alles ein, was eine Schale braucht. Dann wird daraus beim Treffen mit einem Tipp eine Schale. Preis und Gewicht sehen nur du und der Admin.</p>
+  <form method="post" action="{{ url_for('main.add_item') }}" class="stack" enctype="multipart/form-data">
+    {{ chip_fields(none, flavors, csrf_token, flavor_required=False) }}
     {% if is_player %}
     <fieldset>
       <legend>Wer kauft?</legend>
@@ -30,7 +33,8 @@
     <button class="button button-primary" type="submit">Auf die Liste</button>
   </form>
 </details>
-{% else %}
+{% endif %}
+{% if not open_phase %}
 <p class="flash">Die Wertung ist versiegelt. Die Liste lässt sich nicht mehr ändern.</p>
 {% endif %}
 
@@ -40,12 +44,13 @@
   {% for item in items %}
   <li class="{% if item.mine %}shopping-mine{% endif %}">
     <div class="shopping-head">
-      <b>{{ item.label }}</b>
+      <span class="with-thumb">{% if item.image %}<img class="thumb thumb-small" src="{{ url_for('main.photo', name=item.image) }}" alt="" width="40" height="40">{% endif %}<b>{{ item.label }}</b></span>
       {% if item.set_up %}<span class="shopping-bowl">{% if item.bowl %}Schale {{ item.bowl }}{% endif %}</span>{% endif %}
     </div>
     <p class="shopping-meta">
-      {% if item.flavor_type %}{{ item.flavor_type }} · {% endif %}{% if item.own_brand %}Eigenmarke · {% endif %}
+      {% if item.flavor_type and item.name %}{{ item.flavor_type }} · {% endif %}{% if item.own_brand %}Eigenmarke · {% endif %}
       {% if item.buyer_name %}kauft {{ item.buyer_name }}{% else %}gewünscht von {{ item.creator_name }}{% endif %}
+      {% if item.may_see_details and item.price is not none %}· {{ '%.2f'|format(item.price)|replace('.', ',') }} €{% if item.price_100g is not none %} ({{ '%.2f'|format(item.price_100g)|replace('.', ',') }} €/100 g){% endif %}{% endif %}
     </p>
     {% if open_phase %}
     <div class="actions">
@@ -60,12 +65,20 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link-button" type="submit">{% if item.bought %}Doch noch nicht gekauft{% else %}Gekauft{% endif %}</button>
       </form>
+      {% if item.ready %}
+      <form method="post" action="{{ url_for('main.set_up_item', item_id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">Als Schale aufstellen</button>
+      </form>
+      {% else %}
       <a href="{{ url_for('main.home', **{'from': item.id}) }}">Als Schale aufstellen</a>
+      {% endif %}
       <form method="post" action="{{ url_for('main.release_item', item_id=item.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link-button" type="submit">Abgeben</button>
       </form>
       {% endif %}
+      {% if item.may_edit %}<a href="{{ url_for('main.shopping', edit=item.id) }}">Ändern</a>{% endif %}
       {% if item.may_delete %}
       <form method="post" action="{{ url_for('main.delete_item', item_id=item.id) }}" data-confirm="{{ item.label }} von der Liste streichen?">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

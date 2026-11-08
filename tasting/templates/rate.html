@@ -2,7 +2,7 @@
 {% block title %}Schale {{ bowl }} · Blutkrieg der Chips{% endblock %}
 {% block content %}
 <a class="back" href="{{ url_for('main.home') }}">← Alle Schalen</a>
-<p class="eyebrow">{% if own_chip %}Deine eigenen Chips: {{ own_chip.brand }} {{ own_chip.name }}{% else %}Blindverkostung{% endif %}</p>
+<p class="eyebrow">{% if own_chip %}Deine eigenen Chips: {{ own_chip|chip_label }}{% else %}Blindverkostung{% endif %}</p>
 <h1>Schale {{ bowl }}</h1>
 {% if errors %}
 <div class="flash flash-error" role="alert">
