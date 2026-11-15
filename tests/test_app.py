@@ -9,7 +9,7 @@ import unittest
 
 from PIL import Image
 
-from tasting import create_app, security, stats
+from tasting import archive, create_app, security, stats
 from tasting.catalog import SCALE_KEYS
 from tasting.manage import main as manage_main
 from tasting.store import Store
@@ -702,6 +702,107 @@ class Photos(Base):
         self.post(admin, "/admin/ceremony/start")
         self.upload(self.client("b"), "/chips", flavor_type="BBQ", brand="Chio")
         self.assertEqual(self.images(), [])
+
+
+def small_archive(**changes):
+    """Three colas, two people, one question block. Enough for every statistic."""
+    scores = {("A", "1"): 5, ("A", "2"): 3, ("A", "3"): 1, ("B", "1"): 4, ("B", "2"): 2, ("B", "3"): 2}
+    base = {
+        "format": archive.FORMAT, "id": "cola", "number": 1, "title": "Cola-Verkostung",
+        "scale": {"min": 1, "max": 5}, "ranking": "genuss", "tiebreak": "suesse",
+        "sections": [{"title": "Gaumen", "criteria": [
+            {"key": "suesse", "label": "Süße", "low": "herb", "high": "klebrig"},
+            {"key": "genuss", "label": "Genuss", "low": "nein", "high": "ja"}]}],
+        "items": [{"id": "1", "name": "Cherry", "group": "Zucker"}, {"id": "2", "name": "Zero", "group": "Zero"},
+                  {"id": "3", "name": "Fanta", "group": "Zucker"}],
+        "flags": [{"key": "served", "label": "Selbst eingeschenkt"}],
+        "awards": [{"title": "Süßeste Bombe", "terms": [{"key": "suesse"}], "best": "max"}],
+        "ratings": [{"person": person, "item": item, "scores": {"genuss": value, "suesse": 6 - value},
+                     "flags": {"served": person == "A" and item == "1"}, **({"notes": "Lecker"} if value == 5 else {})}
+                    for (person, item), value in scores.items()],
+    }
+    return {**base, **changes}
+
+
+class Archive(Base):
+    def upload(self, client, entry):
+        body = json.dumps(entry).encode() if isinstance(entry, dict) else entry
+        return client.post("/admin/archiv", data={"csrf_token": self.token(client), "file": (io.BytesIO(body), "a.json")},
+                           content_type="multipart/form-data")
+
+    def test_admin_archives_and_everyone_reads(self):
+        admin = self.client("admin")
+        self.assertEqual(self.upload(admin, small_archive()).status_code, 302)
+        player = self.client("a")
+        hub = player.get("/verkostungen").get_data(as_text=True)
+        self.assertIn("Cola-Verkostung", hub)
+        self.assertIn("Cherry", hub)
+        self.assertEqual(player.get("/archiv/cola").status_code, 200)
+        result = player.get("/api/archiv/cola").get_json()
+        self.assertEqual([r["name"] for r in result["ranking"]], ["Cherry", "Zero", "Fanta"])
+
+    def test_bad_archives_are_refused(self):
+        admin = self.client("admin")
+        for entry in (b"{kaputt", {"format": "x"}, small_archive(id="../users"), small_archive(ranking="nichts"),
+                      small_archive(ratings=[{"person": "A", "item": "9", "scores": {"genuss": 3}}]),
+                      small_archive(ratings=[{"person": "A", "item": "1", "scores": {"genuss": 9}}])):
+            self.upload(admin, entry)
+        self.assertEqual(self.store.archives(), [])
+
+    def test_only_the_admin_changes_the_archive(self):
+        self.upload(self.client("admin"), small_archive())
+        player = self.client("a")
+        self.assertEqual(self.upload(player, small_archive(title="Gehackt")).status_code, 403)
+        self.assertEqual(self.post(player, "/admin/archiv/cola/delete").status_code, 403)
+        self.post(self.client("admin"), "/admin/archiv/cola/delete")
+        self.assertEqual(self.store.archives(), [])
+
+    def test_unknown_or_odd_ids_are_404(self):
+        player = self.client("a")
+        for archive_id in ("nope", "..", "Cola", "%2e%2e%2fusers"):
+            self.assertEqual(player.get(f"/archiv/{archive_id}").status_code, 404, archive_id)
+            self.assertEqual(player.get(f"/api/archiv/{archive_id}").status_code, 404, archive_id)
+
+    def test_login_lands_on_the_overview(self):
+        response = self.post(self.client(), "/login", user="a", passphrase=PASS)
+        self.assertTrue(response.headers["Location"].endswith("/verkostungen"))
+
+    def test_overview_keeps_the_live_tasting_blind(self):
+        _, chips = self.add_chips()
+        body = self.client("a").get("/verkostungen").get_data(as_text=True)
+        self.assertIn("3</b> Schalen", body)
+        for secret in ("Geheimchip", "Funny"):
+            self.assertNotIn(secret, body)
+
+
+class ArchiveStats(unittest.TestCase):
+    def test_ranking_groups_flags_and_awards(self):
+        result = archive.compute(small_archive())
+        self.assertEqual(result["ranking"][0]["value"], 4.5)
+        groups = {g["name"]: g["averages"]["genuss"] for g in result["groups"]}
+        self.assertEqual(groups, {"Zero": 2.5, "Zucker": 3})
+        self.assertEqual((result["flags"][0]["with"], result["flags"][0]["count"]), (5, 1))
+        awards = {a["title"]: a["winner"] for a in result["awards"]}
+        self.assertEqual(awards["Süßeste Bombe"], "Fanta")
+        self.assertEqual((awards["Großzügigster Gaumen"], awards["Härteste Kritik"]), ("A", "B"))
+        self.assertEqual([n["item"] for n in result["notes"]], ["Cherry"])
+
+    def test_inverted_award_terms(self):
+        entry = small_archive(awards=[{"title": "Am wenigsten süß", "terms": [{"key": "suesse", "invert": True}], "best": "max"}])
+        self.assertEqual(archive.compute(entry)["awards"][0]["winner"], "Cherry")
+
+    def test_twins_need_three_shared_items(self):
+        result = archive.compute(small_archive())
+        self.assertAlmostEqual(result["twins"]["closest"]["r"], 0.866, places=2)
+        entry = small_archive(items=small_archive()["items"][:2])
+        entry["ratings"] = [r for r in entry["ratings"] if r["item"] != "3"]
+        self.assertIsNone(archive.compute(entry)["twins"]["closest"])
+
+    def test_missing_answers_are_skipped(self):
+        entry = small_archive()
+        entry["ratings"][0]["scores"]["suesse"] = None
+        self.assertIsNone(archive.validate(entry))
+        self.assertEqual(archive.compute(entry)["ranking"][0]["averages"]["suesse"], 2)
 
 
 class Cleanup(Base):

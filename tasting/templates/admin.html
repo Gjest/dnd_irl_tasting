@@ -109,6 +109,35 @@
   </div>
 </section>
 
+<section class="card">
+  <h2>Archiv</h2>
+  <p class="hint">Abgeschlossene Verkostungen, die alle unter „Verkostungen“ nachlesen können. Eine Archivdatei bringt ihre Fragen mit. Eine Datei mit derselben Id ersetzt die alte.</p>
+  {% if archives %}
+  <ul class="my-chips">
+    {% for entry in archives %}
+    <li>
+      <span><b>{{ entry.title }}</b> <small>{{ entry["items"]|length }} Sorten, {{ entry.ratings|length }} Wertungen</small></span>
+      <span class="actions">
+        <a href="{{ url_for('main.archive_page', archive_id=entry.id) }}">Ansehen</a>
+        <form method="post" action="{{ url_for('main.admin_archive_delete', archive_id=entry.id) }}" data-confirm="{{ entry.title }} aus dem Archiv entfernen?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="link-button" type="submit">Entfernen</button>
+        </form>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">Noch nichts archiviert.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('main.admin_archive_upload') }}" class="stack add-chip" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Archivdatei (JSON)</span>
+      <input type="file" name="file" accept="application/json,.json" required></label>
+    <button class="button" type="submit">Ins Archiv</button>
+  </form>
+</section>
+
 <section class="card card-danger">
   <h2>Daten einspielen</h2>
   <p class="hint">Ersetzt Schalen, Wertungen und Einkaufsliste durch eine JSON-Datei, zum Beispiel einen bearbeiteten Export von oben. Logins und Fotos bleiben, wie sie sind. Vorher landet eine Sicherung in <code>data/backups</code>.</p>

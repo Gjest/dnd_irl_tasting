@@ -24,11 +24,12 @@ from flask import (
     url_for,
 )
 
-from . import images, security, stats
+from . import archive, images, security, stats
 from .store import validate_tasting
 from .catalog import (
     ADDICTION_TIERS,
     FLAVOR_TYPES,
+    LIVE_TASTING,
     MAX_DC,
     MAX_NOTES_LENGTH,
     MAX_SOUL_COINS,
@@ -96,7 +97,7 @@ def healthz():
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if g.user:
-        return redirect(url_for("main.home"))
+        return redirect(url_for("main.tastings"))
     users = store().users()
     limiter = current_app.extensions["limiter"]
     error = None
@@ -115,7 +116,7 @@ def login():
                 session.permanent = True
                 session["uid"] = uid
                 session["fp"] = user["hash"][-16:]
-                return redirect(url_for("main.home"))
+                return redirect(url_for("main.tastings"))
             limiter.record_failure(ip, uid)
             error = "Falsche Passphrase. Der Vertrag bleibt ungültig."
     options = sorted(
@@ -129,6 +130,54 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("main.login"))
+
+
+# --- All tastings --------------------------------------------------------
+
+
+def _live_card():
+    tasting = store().read()
+    me = g.user["id"]
+    chips = tasting["chips"]
+    ranked = stats.ranked_chip_ids(tasting) if tasting["phase"] == "revealed" else []
+    winner = next((stats.chip_label(c) for c in chips if ranked and c["id"] == ranked[0]), None)
+    return {
+        **LIVE_TASTING,
+        "phase": tasting["phase"],
+        "bowls": len(chips),
+        "shopping": len(tasting["shopping"]),
+        "rated": sum(1 for c in chips if me in tasting["ratings"].get(c["id"], {})),
+        "winner": winner,
+    }
+
+
+@bp.get("/verkostungen")
+@login_required
+def tastings():
+    cards = []
+    for entry in store().archives():
+        if archive.validate(entry) is None:
+            cards.append(archive.summary(entry))
+    return render_template("hub.html", live=_live_card(), archives=cards)
+
+
+def _archive_or_404(archive_id):
+    entry = store().archive(archive_id) if archive.ID_PATTERN.fullmatch(archive_id) else None
+    if entry is None or archive.validate(entry):
+        abort(404)
+    return entry
+
+
+@bp.get("/archiv/<archive_id>")
+@login_required
+def archive_page(archive_id):
+    return render_template("archive.html", entry=_archive_or_404(archive_id))
+
+
+@bp.get("/api/archiv/<archive_id>")
+@login_required
+def api_archive(archive_id):
+    return jsonify(archive.compute(_archive_or_404(archive_id)))
 
 
 # --- Tasting -------------------------------------------------------------
@@ -396,7 +445,36 @@ def admin():
         any_ratings=any(counts.values()),
         adders=_display_names(),
         public_url=current_app.config["PUBLIC_URL"],
+        archives=store().archives(),
     )
+
+
+@bp.post("/admin/archiv")
+@admin_required
+def admin_archive_upload():
+    """Adds or replaces a finished tasting in the archive."""
+    upload = request.files.get("file")
+    try:
+        entry = json.loads(upload.read().decode("utf-8")) if upload and upload.filename else None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        entry = None
+    problem = "Das ist keine lesbare JSON-Datei." if entry is None else archive.validate(entry)
+    if problem:
+        flash(f"Nichts archiviert. {problem}")
+        return redirect(url_for("main.admin"))
+    replaced = store().archive(entry["id"]) is not None
+    store().save_archive(entry)
+    flash(f"„{entry['title']}“ ist {'ersetzt' if replaced else 'im Archiv'}: {len(entry['items'])} Sorten, {len(entry['ratings'])} Wertungen.")
+    return redirect(url_for("main.admin"))
+
+
+@bp.post("/admin/archiv/<archive_id>/delete")
+@admin_required
+def admin_archive_delete(archive_id):
+    _archive_or_404(archive_id)
+    store().delete_archive(archive_id)
+    flash("Aus dem Archiv entfernt.")
+    return redirect(url_for("main.admin"))
 
 
 def _display_names():

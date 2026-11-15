@@ -11,9 +11,10 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header">
-    <a class="brand" href="{{ url_for('main.home') }}">Blutkrieg <span>der Chips</span></a>
+    <a class="brand" href="{{ url_for('main.tastings') if user else url_for('main.login') }}">Blutkrieg <span>der Chips</span></a>
     {% if user %}
     <nav class="site-nav" aria-label="Hauptmenü">
+      <a href="{{ url_for('main.tastings') }}">Verkostungen</a>
       {% if user.role == 'player' %}<a href="{{ url_for('main.home') }}">Schalen</a>{% endif %}
       <a href="{{ url_for('main.shopping') }}">Einkauf</a>
       <a href="{{ url_for('main.unsealing') }}">Enthüllung</a>

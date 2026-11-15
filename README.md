@@ -41,6 +41,14 @@ Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_
 4. **Reveal:** press "Enthüllung starten" and click through on the big screen. This locks ratings. "Wertung wieder öffnen" undoes it without losing anything.
 5. **After:** results, statistics and printable certificates are open to everyone.
 
+## All tastings in one place
+
+After logging in, everyone lands on "Verkostungen". It shows the live chips tasting with a button to take part, and every finished tasting in the archive with its winner. An archived tasting has its own results page with ranking, awards, x-ray, group battle, people, taste twins, notes and the original questions.
+
+The admin adds finished tastings under "Archiv" on the admin page. Each one is a single JSON file that brings its own questions along, and the format is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The cola and water tastings were converted with the scripts in `tools/`. The resulting files hold real names, so they are not in git.
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) also has the plan for future tastings.
+
 ## Cleaning up data
 
 The Admin login can open "Datenpflege" on the admin page. It shows all ratings in plain text, so it spoils the tasting while it's running. That's why Admin is a separate login from your player login.
@@ -81,6 +89,7 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | File | Content |
 |---|---|
 | `data/tasting.json` | Chips and all ratings, plain JSON |
+| `data/archive/` | Finished tastings, one JSON file each |
 | `data/images/` | Photos of bags, re-encoded as JPEG |
 | `data/backups/` | A copy at most every 5 minutes while data changes, last 100 kept |
 | `data/users.json` | Names and passphrase hashes |

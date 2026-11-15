@@ -107,11 +107,14 @@ class Store:
         self.users_path = self.data_dir / "users.json"
         self.backup_dir = self.data_dir / "backups"
         self.images_dir = self.data_dir / "images"
+        # Finished tastings, one self-describing file each (see archive.py).
+        self.archive_dir = self.data_dir / "archive"
         self._lock = threading.RLock()
         self._last_backup = 0.0
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(exist_ok=True)
         self.images_dir.mkdir(exist_ok=True)
+        self.archive_dir.mkdir(exist_ok=True)
         # A corrupt file raises here on purpose: better to refuse to start than
         # to silently overwrite ratings with an empty tasting.
         if self.tasting_path.exists():
@@ -158,6 +161,26 @@ class Store:
 
     # Users are re-read on every request so that passphrase changes made with
     # manage.py (a separate process) apply without restarting the server.
+    def archives(self):
+        """All archived tastings, oldest first."""
+        found = []
+        for path in sorted(self.archive_dir.glob("*.json")):
+            found.append(json.loads(path.read_text(encoding="utf-8")))
+        return sorted(found, key=lambda a: (a.get("number") or 999, a.get("date") or "", a["title"]))
+
+    def archive(self, archive_id):
+        path = self.archive_dir / f"{archive_id}.json"
+        # The id comes from a URL, so only names the archive itself would use get through.
+        if "/" in archive_id or archive_id.startswith(".") or not path.is_file():
+            return None
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def save_archive(self, archive):
+        write_json_atomic(self.archive_dir / f"{archive['id']}.json", archive)
+
+    def delete_archive(self, archive_id):
+        (self.archive_dir / f"{archive_id}.json").unlink(missing_ok=True)
+
     def users(self):
         if not self.users_path.exists():
             return {}
