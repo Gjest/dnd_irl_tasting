@@ -424,12 +424,7 @@ def _refresh_reveal_order(data):
 
 def _upload_photo():
     """Saves the form's photo. Returns (name, error)."""
-    try:
-        # The camera button and the file button both send "image", one of them empty.
-        upload = next((f for f in request.files.getlist("image") if f.filename), None)
-        return images.save_upload(upload, store().images_dir), None
-    except images.ImageError as error:
-        return None, str(error)
+    return images.save_from_form(request.files, store().images_dir)
 
 
 def _new_photo(entry, uploaded):

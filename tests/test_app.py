@@ -755,7 +755,7 @@ class Tastings(Base):
         with open(os.path.join(self.tmp.name, "cola.json"), encoding="utf-8") as f:
             self.assertEqual(json.load(f)["id"], "cola")
         player = self.client("a")
-        self.assertIn("Sieger: Cherry", player.get("/").get_data(as_text=True))
+        self.assertIn("♛ Cherry", player.get("/").get_data(as_text=True))
         page = player.get("/cola/").get_data(as_text=True)
         self.assertIn("theme-cola.css", page)
         self.assertNotIn("Daten verwalten", page)
@@ -811,6 +811,47 @@ class Tastings(Base):
         app = create_app(self.tmp.name)
         self.assertTrue(app.extensions["store"].document("wasser").exists())
         self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "wasser.json")))
+
+    def start_photo(self, client, caption="Die Tafel"):
+        return client.post("/start/fotos", data={"csrf_token": self.token(client), "caption": caption,
+                                                 "image": (io.BytesIO(photo_bytes()), "foto.png")},
+                           content_type="multipart/form-data")
+
+    def test_admin_photos_become_gallery_and_background(self):
+        admin, player = self.client("admin"), self.client("a")
+        self.start_photo(admin, "Erste")
+        self.start_photo(admin, "Zweite")
+        start = self.store.document("start").read()
+        first, second = (p["name"] for p in start["photos"])
+        self.assertEqual(start["background"], first)
+        page = player.get("/").get_data(as_text=True)
+        self.assertIn("Aus dem Gildenbuch", page)
+        self.assertIn(f'class="m-backdrop" src="/fotos/{first}"', page)
+        self.assertNotIn("Gildenhalle schmücken", page)
+        self.assertEqual(player.get(f"/fotos/{second}").mimetype, "image/jpeg")
+        self.post(admin, f"/start/fotos/{second}/hintergrund")
+        self.assertEqual(self.store.document("start").read()["background"], second)
+        self.post(admin, f"/start/fotos/{second}/loeschen")
+        start = self.store.document("start").read()
+        self.assertEqual((len(start["photos"]), start["background"]), (1, first))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "images", second)))
+        self.assertEqual(player.get(f"/fotos/{second}").status_code, 404)
+
+    def test_only_the_admin_decorates_and_strangers_see_nothing(self):
+        player = self.client("a")
+        self.assertEqual(self.start_photo(player).status_code, 403)
+        self.start_photo(self.client("admin"))
+        name = self.store.document("start").read()["photos"][0]["name"]
+        self.assertEqual(self.post(player, f"/start/fotos/{name}/loeschen").status_code, 403)
+        self.assertEqual(self.client().get(f"/fotos/{name}").status_code, 302)
+        self.assertNotIn(name, self.client().get("/login").get_data(as_text=True))
+
+    def test_photos_of_bowls_are_not_served_as_start_photos(self):
+        alice = self.client("a")
+        alice.post("/chips/chips", data={"csrf_token": self.token(alice), "brand": "Chio", "flavor_type": "BBQ",
+                                         "image": (io.BytesIO(photo_bytes()), "t.png")}, content_type="multipart/form-data")
+        name = self.store.read()["chips"][0]["image"]
+        self.assertEqual(self.client("b").get(f"/fotos/{name}").status_code, 404)
 
     def test_every_page_renders(self):
         admin, chips = self.add_chips()

@@ -1,8 +1,12 @@
 """Turns the cola analysis page and the water H2 database into archive files.
 
 Run from the project root:
-  python3 tools/archive_cola_water.py ../cola-tasting/cola_tasting_analyse_v3-1.html water.json
+  python3 tools/archive_cola_water.py ../cola-tasting/cola_tasting_analyse_v3-1.html water.json [aliases.json]
 where water.json comes from: python3 tools/h2rows.py ../WaterTasting/export/watertasting.mv.db > water.json
+
+aliases.json maps names as they were recorded to the names the group uses
+everywhere, e.g. {"Lennart": "Der Lenny"}. It holds real names, so it stays
+next to the exports and out of git.
 """
 import json
 import re
@@ -85,7 +89,7 @@ def cola(path):
     }
 
 
-def water(path):
+def water(path, aliases=None):
     rows = json.load(open(path, encoding="utf-8"))
     keys = ["clarity", "color", "odor", "carbonation", "temperature", "body", "mineral_intensity", "sweetness",
             "bitterness", "salinity", "ph_sensation", "duration", "harmony", "personal_enjoyment"]
@@ -98,7 +102,7 @@ def water(path):
     for r in sorted(rows, key=lambda r: r["created_at"]):
         notes = (r.get("notes") or "").strip()
         ratings.append({
-            "person": r["adventurer_name"].strip(),
+            "person": (aliases or {}).get(r["adventurer_name"].strip(), r["adventurer_name"].strip()),
             "item": ids[r["water_sample_id"].strip()],
             "scores": {k: r[k] for k in keys},
             "time": r["created_at"],
@@ -112,7 +116,8 @@ def water(path):
         "subtitle": "D&D-Wochenende, 14. bis 16. August 2026",
         "date": "2026-08-14",
         "intro": "Die zweite Verkostung lief als eigene App mit Datenbank. Übernommen ist der bereinigte Stand, "
-                 "in dem Namen und Sorten schon vereinheitlicht waren.",
+                 "in dem Namen und Sorten schon vereinheitlicht waren."
+                 + (" Die Namen sind auf die Spitznamen der Gruppe umgestellt." if aliases else ""),
         "scale": {"min": 1, "max": 5},
         "ranking": "personal_enjoyment",
         "tiebreak": "harmony",
@@ -153,7 +158,8 @@ def water(path):
 
 
 if __name__ == "__main__":
-    for name, archive in (("export/archiv-cola.json", cola(sys.argv[1])), ("export/archiv-wasser.json", water(sys.argv[2]))):
+    aliases = json.load(open(sys.argv[3], encoding="utf-8")) if len(sys.argv) > 3 else {}
+    for name, archive in (("export/archiv-cola.json", cola(sys.argv[1])), ("export/archiv-wasser.json", water(sys.argv[2], aliases))):
         with open(name, "w", encoding="utf-8") as f:
             json.dump(archive, f, ensure_ascii=False, indent=2)
         print(name, len(archive["items"]), "Dinge,", len(archive["ratings"]), "Wertungen")

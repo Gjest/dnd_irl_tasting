@@ -1,7 +1,15 @@
 {% extends "master.html" %}
+{% from "_photo_field.html" import photo_picker %}
+{% block backdrop %}
+{% if start.background %}
+<img class="m-backdrop" src="{{ url_for('core.photo', name=start.background) }}" alt="">
+<div class="m-backdrop-shade" aria-hidden="true"></div>
+{% endif %}
+{% endblock %}
 {% block content %}
-<h1 class="m-title">Hallo {{ user.name }}</h1>
-<p class="m-lead">Wähle eine Verkostung.</p>
+<p class="m-eyebrow">Die Verkostungsgilde</p>
+<h1 class="m-title">Willkommen zurück, {{ user.name }}</h1>
+<p class="m-lead">Welches Abenteuer kostest du heute?</p>
 <nav class="tiles-grid" aria-label="Verkostungen">
   {% for tile in tiles %}
   <a class="app-tile app-tile-{{ tile.slug }}{% if tile.live %} app-tile-live{% endif %}" href="{{ tile.href }}">
@@ -13,8 +21,58 @@
     <span class="app-tile-title">{{ tile.title }}</span>
     <span class="app-tile-tagline">{{ tile.tagline }}</span>
     <span class="app-tile-facts">{{ tile.facts|join(' · ') }}</span>
-    {% if tile.winner %}<span class="app-tile-winner">Sieger: {{ tile.winner }}</span>{% endif %}
+    {% if tile.winner %}<span class="app-tile-winner">♛ {{ tile.winner }}</span>{% endif %}
   </a>
   {% endfor %}
 </nav>
+
+{% if start.photos %}
+<section class="m-gallery" aria-labelledby="gallery-title">
+  <h2 id="gallery-title" class="m-section-title">Aus dem Gildenbuch</h2>
+  <div class="m-gallery-strip">
+    {% for photo in start.photos %}
+    <figure class="m-photo">
+      <a href="{{ url_for('core.photo', name=photo.name) }}"><img src="{{ url_for('core.photo', name=photo.name) }}" alt="{{ photo.caption or 'Foto aus dem Gildenbuch' }}" loading="lazy"></a>
+      {% if photo.caption %}<figcaption>{{ photo.caption }}</figcaption>{% endif %}
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if user.role == 'admin' %}
+<details class="m-card m-admin" {% if not start.photos %}open{% endif %}>
+  <summary>Gildenhalle schmücken</summary>
+  <p class="m-hint">Fotos erscheinen hier im Gildenbuch, eines davon als Hintergrund dieser Seite. Die Login-Seite zeigt keine Fotos, weil sie auch ohne Anmeldung zu sehen ist.</p>
+  <form method="post" action="{{ url_for('core.add_photo') }}" class="m-stack" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ photo_picker('Foto') }}
+    <label class="m-field"><span>Bildunterschrift (optional)</span>
+      <input type="text" name="caption" maxlength="120" placeholder="z. B. Die Wasser-Tafel, August 2026"></label>
+    <button class="m-button" type="submit">An die Wand hängen</button>
+  </form>
+  {% if start.photos %}
+  <ul class="m-photo-admin">
+    {% for photo in start.photos %}
+    <li>
+      <img src="{{ url_for('core.photo', name=photo.name) }}" alt="" width="56" height="56">
+      <span>{{ photo.caption or 'Ohne Unterschrift' }}{% if photo.name == start.background %} <b>· Hintergrund</b>{% endif %}</span>
+      <span class="m-actions">
+        {% if photo.name != start.background %}
+        <form method="post" action="{{ url_for('core.set_background', name=photo.name) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="m-link" type="submit">Als Hintergrund</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('core.delete_photo', name=photo.name) }}" data-confirm="Dieses Foto entfernen?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="m-link m-danger" type="submit">Entfernen</button>
+        </form>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</details>
+{% endif %}
 {% endblock %}

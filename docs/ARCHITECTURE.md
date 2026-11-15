@@ -12,8 +12,8 @@ The group has tasted cola (Google Forms), water (a Spring app) and chips (this a
 ## Layout
 
 ```
-/                 neutral start page: one tile per tasting        core.py, landing.html, master.css
-/login            neutral login, one login for every tasting      core.py, login.html
+/                 guild hall start page: tiles, photo gallery     core.py, landing.html, master.css
+/login            guild hall login, one login for every tasting   core.py, login.html
 /chips/…          the live chips tasting, Avernus look            views.py (blueprint "main"), base.html, style.css
 /cola/  /wasser/  finished tastings, each in its own look         results.py, results_page.html, theme-<slug>.css
 ```
@@ -22,6 +22,7 @@ The group has tasted cola (Google Forms), water (a Spring app) and chips (this a
 |---|---|---|
 | `registry.py` | The list of tiles: slug, kind, title, tagline, icon, theme | The start page and `results.py` |
 | `store.py` → `JsonDocument` | One JSON file in memory, atomic writes, rolling backups, `replace()` with a backup first | `tasting.json` for chips, `<slug>.json` for every other tasting |
+| `images.py` | Re-encodes uploaded photos, `save_from_form()` for the camera and file buttons | Bowls, list items and start page photos (`data/start.json`) |
 | `web.py` | `store()`, `login_required`, `admin_required` | Every blueprint |
 | `archive.py` | Checks a results file and computes ranking, awards, groups, people, twins, flags and notes | `results.py` |
 | `static/js/report.js` | Bars, tables, heat maps, taste twins, chart colors read from the theme | Chips results and every results page |
@@ -72,7 +73,7 @@ A finished tasting is one JSON file that brings its own questions along. The res
 | Cola | `cola-tasting/Cola Tasting.html` (the saved form) and `cola_tasting_analyse_v3-1.html` (all 75 answers) | The questions, their order and the scale ends come straight from the saved form, so nothing had to be guessed. "Weitere Noten" became the notes, "Eingeschenkt?" the flag. Zero and sugar come from the old analysis. |
 | Water | `WaterTasting/export/watertasting.mv.db` | `tools/h2rows.py` reads the H2 file directly, without Java or H2. That file is the cleaned version, with names and sample spellings already unified. It holds 82 ratings, and the 9 deleted test rows stay deleted. The questions come from the old form, translated to German. The mineral battle splits at the average mineral intensity, as the old dashboard did. |
 
-`tools/archive_cola_water.py` rebuilds both files. They hold real names and stay out of git; the admin uploads them on the tile's page.
+`tools/archive_cola_water.py` rebuilds both files. An optional third argument maps recorded names to the group's nicknames. For the water tasting that file is `export/aliase.json`, kept out of git because it pairs nicknames with real names. They hold real names and stay out of git; the admin uploads them on the tile's page.
 
 ## Adding a tasting
 
@@ -103,4 +104,4 @@ Today the chips tasting is the only live one, and its code assumes chips: `catal
 
 - **Live engine:** instead of copying code, move the questions into a definition file per tasting, using the same `sections`, `scale`, `ranking` and `awards` keys as a results file, and have one set of live pages read it. Chips-only features (Sucht-Save tiers, alignment, nutrition, shopping list) would become switches in that definition. The copy above is the first step and shows which parts really differ.
 - **Chips into the archive:** an admin action that turns `tasting.json` into a results file once the chips tasting is over, so its tile stays readable after the next tasting starts.
-- **People across tastings:** water uses real names, while cola and chips use nicknames. An admin-maintained `data/people.json` mapping them would allow a hall of fame across all tastings. The app does not guess these mappings.
+- **People across tastings:** every tasting now uses the same nicknames, so a hall of fame across all tastings only needs to read the files that are already there.

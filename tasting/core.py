@@ -3,19 +3,22 @@ tiles, old addresses and error pages."""
 
 from flask import (
     Blueprint,
+    abort,
     current_app,
+    flash,
     g,
     jsonify,
     redirect,
     render_template,
     request,
+    send_from_directory,
     session,
     url_for,
 )
 
-from . import results, security, views
+from . import images, results, security, views
 from .registry import TASTINGS
-from .web import login_required, store, wants_json
+from .web import admin_required, login_required, store, wants_json
 
 bp = Blueprint("core", __name__)
 
@@ -75,7 +78,77 @@ def landing():
             info = results.tile(tasting)
             href = url_for("results.page", slug=tasting["slug"])
         tiles.append({**tasting, **info, "href": href})
-    return render_template("landing.html", tiles=tiles)
+    return render_template("landing.html", tiles=tiles, start=_start().read())
+
+
+# --- Photos on the start page ------------------------------------------------
+# The admin uploads them; one is the background, all of them form the gallery.
+# They live in data/images like bowl photos, listed in data/start.json.
+
+MAX_PHOTOS = 40
+MAX_CAPTION = 120
+
+
+def _start():
+    return store().document("start", empty=lambda: {"photos": [], "background": None})
+
+
+def _photo_names():
+    return {photo["name"] for photo in _start().read()["photos"]}
+
+
+@bp.get("/fotos/<name>")
+@login_required
+def photo(name):
+    if not images.NAME_PATTERN.fullmatch(name) or name not in _photo_names():
+        abort(404)
+    response = send_from_directory(store().images_dir, name, mimetype="image/jpeg")
+    response.headers["Cache-Control"] = "private, max-age=3600"
+    return response
+
+
+@bp.post("/start/fotos")
+@admin_required
+def add_photo():
+    if len(_start().read()["photos"]) >= MAX_PHOTOS:
+        flash(f"Mehr als {MAX_PHOTOS} Fotos passen nicht an die Wand.")
+        return redirect(url_for("core.landing"))
+    name, error = images.save_from_form(request.files, store().images_dir)
+    if error or not name:
+        flash(error or "Kein Foto ausgewählt.")
+        return redirect(url_for("core.landing"))
+    with _start().edit() as data:
+        data["photos"].append({"name": name, "caption": request.form.get("caption", "").strip()[:MAX_CAPTION]})
+        if not data["background"]:
+            data["background"] = name
+    flash("Das Foto hängt jetzt an der Wand.")
+    return redirect(url_for("core.landing"))
+
+
+@bp.post("/start/fotos/<name>/hintergrund")
+@admin_required
+def set_background(name):
+    if name not in _photo_names():
+        abort(404)
+    with _start().edit() as data:
+        data["background"] = name
+    flash("Neuer Hintergrund.")
+    return redirect(url_for("core.landing"))
+
+
+@bp.post("/start/fotos/<name>/loeschen")
+@admin_required
+def delete_photo(name):
+    if not images.NAME_PATTERN.fullmatch(name) or name not in _photo_names():
+        abort(404)
+    with _start().edit() as data:
+        data["photos"] = [p for p in data["photos"] if p["name"] != name]
+        if data["background"] == name:
+            data["background"] = data["photos"][0]["name"] if data["photos"] else None
+    # Photo names are random, so no bowl or list item shares this file.
+    (store().images_dir / name).unlink(missing_ok=True)
+    flash("Foto entfernt.")
+    return redirect(url_for("core.landing"))
 
 
 # Addresses from before everything moved below /chips, kept alive for

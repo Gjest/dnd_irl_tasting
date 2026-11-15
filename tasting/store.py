@@ -194,10 +194,10 @@ class Store:
     def snapshot(self):
         self._tasting.snapshot()
 
-    def document(self, slug):
-        """The JSON file of another tasting, data/<slug>.json. It may not exist yet."""
+    def document(self, slug, empty=None):
+        """data/<slug>.json, e.g. a finished tasting. Without `empty` it may not exist yet."""
         if slug not in self._documents:
-            self._documents[slug] = JsonDocument(self.data_dir / f"{slug}.json", self.backup_dir)
+            self._documents[slug] = JsonDocument(self.data_dir / f"{slug}.json", self.backup_dir, empty)
         return self._documents[slug]
 
     # Users are re-read on every request so that passphrase changes made with

@@ -54,6 +54,19 @@ def save_upload(upload, directory):
     return name
 
 
+def save_from_form(files, directory):
+    """Saves the photo from a form with a camera button and a file button.
+
+    Both inputs are called "image" and at most one carries a file. Returns
+    (name, error); name is None when nothing was chosen.
+    """
+    upload = next((f for f in files.getlist("image") if f.filename), None)
+    try:
+        return save_upload(upload, directory), None
+    except ImageError as error:
+        return None, str(error)
+
+
 def referenced(data):
     return {
         entry["image"]

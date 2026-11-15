@@ -1,9 +1,11 @@
 {% extends "master.html" %}
-{% block title %}Anmelden · Verkostungen{% endblock %}
+{% block title %}Anmelden · Die Verkostungsgilde{% endblock %}
 {% block content %}
-<section class="m-card m-login">
-  <h1 class="m-title">Anmelden</h1>
-  <p class="m-lead">Ein Login für alle Verkostungen.</p>
+<section class="m-card m-scroll m-login">
+  <p class="m-eyebrow">Gildenhalle · Eintritt nur mit Siegel</p>
+  <h1 class="m-title">Tritt ein, Abenteurer</h1>
+  <p class="m-lead">Hier wird gekostet, gewürfelt und geurteilt. Ein Siegel öffnet alle Verkostungen der Gilde.</p>
+  <p class="m-divider" aria-hidden="true">✦ ✦ ✦</p>
   {% if error %}<p class="m-flash m-flash-error" role="alert">{{ error }}</p>{% endif %}
   {% if options %}
   <form method="post" class="m-stack">
@@ -23,7 +25,7 @@
              autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="wort-wort-wort-123">
     </label>
     <label class="m-check"><input id="show-passphrase" type="checkbox"> Passphrase anzeigen</label>
-    <button class="m-button" type="submit">Anmelden</button>
+    <button class="m-button" type="submit">Eintreten</button>
   </form>
   {% else %}
   <p class="m-flash m-flash-error">Noch keine Logins angelegt. Führe <code>./setup.sh</code> auf dem Server aus.</p>

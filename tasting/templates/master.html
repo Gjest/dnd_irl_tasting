@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <meta name="color-scheme" content="light dark">
-  <title>{% block title %}Verkostungen{% endblock %}</title>
+  <meta name="theme-color" content="#1a110b">
+  <title>{% block title %}Die Verkostungsgilde{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/master.css') }}">
   <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
 </head>
 <body>
+  {% block backdrop %}{% endblock %}
   <header class="m-header">
-    <a class="m-brand" href="{{ url_for('core.landing') if user else url_for('core.login') }}">Verkostungen</a>
+    <a class="m-brand" href="{{ url_for('core.landing') if user else url_for('core.login') }}"><span aria-hidden="true">⚜</span> Die Verkostungsgilde</a>
     {% if user %}
     <form method="post" action="{{ url_for('core.logout') }}" class="m-user">
       <span>{{ user.name }}</span>

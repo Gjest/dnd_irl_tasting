@@ -1,7 +1,7 @@
 {% extends "master.html" %}
-{% block title %}Fehler {{ code }} · Verkostungen{% endblock %}
+{% block title %}Fehler {{ code }} · Die Verkostungsgilde{% endblock %}
 {% block content %}
-<section class="m-card">
+<section class="m-card m-scroll">
   <p class="m-eyebrow">Fehler {{ code }}</p>
   <h1 class="m-title">
     {% if code == 403 %}Kein Zutritt{% elif code == 404 %}Nicht gefunden{% elif code == 413 %}Zu groß{% else %}Das hat nicht geklappt{% endif %}
