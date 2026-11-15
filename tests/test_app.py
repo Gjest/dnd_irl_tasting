@@ -433,36 +433,42 @@ class Shopping(Base):
         self.post(self.client("admin"), f"/einkauf/{item}/delete")
         self.assertEqual(self.items(), [])
 
-    def test_item_becomes_a_bowl_and_stays_blind(self):
+    def test_anyone_sets_up_any_item_and_the_buyer_stays_blind(self):
         alice, bob = self.client("a"), self.client("b")
         self.add(alice)
         item = self.items()[0]["id"]
-        form = alice.get(f"/?from={item}").get_data(as_text=True)
+        form = bob.get(f"/?from={item}").get_data(as_text=True)
         self.assertIn('value="Ungarisch"', form)
-        self.post(alice, "/chips", name="Ungarisch", brand="Funny-Frisch", flavor_type="Paprika",
+        self.post(bob, "/chips", name="Ungarisch", brand="Funny-Frisch", flavor_type="Paprika",
                   price="2,49", weight="175", item_id=item)
-        data = self.store.read()
-        chip = data["chips"][0]
-        self.assertEqual((chip["added_by"], chip["weight"]), ("a", 175))
-        self.assertEqual((data["shopping"][0]["chip_id"], data["shopping"][0]["bought"]), (chip["id"], True))
-        self.assertIn("Schale 1", alice.get("/einkauf").get_data(as_text=True))
-        self.assertNotIn("Schale 1", bob.get("/einkauf").get_data(as_text=True))
-        # A second bowl from the same item is not possible.
-        self.assertEqual(self.post(alice, "/chips", name="x", flavor_type="BBQ", item_id=item).status_code, 403)
+        chip = self.store.read()["chips"][0]
+        self.assertEqual((chip["added_by"], chip["bought_by"], chip["item_id"]), ("b", "a", item))
+        # Alice bought the bag but must not learn which bowl it became.
+        self.assertNotIn("Schale 1", alice.get("/einkauf").get_data(as_text=True))
+        self.assertNotIn("Deine Chips", alice.get("/").get_data(as_text=True))
+        self.assertIn("Deine Chips", bob.get("/").get_data(as_text=True))
+        self.assertFalse(alice.get("/api/progress").get_json()["bowls"][0]["brought"])
+        self.assertTrue(bob.get("/api/progress").get_json()["bowls"][0]["brought"])
+        self.assertNotIn("Deine eigenen Chips", alice.get(f"/schale/{chip['id']}").get_data(as_text=True))
+        self.assertIn("Deine eigenen Chips", bob.get(f"/schale/{chip['id']}").get_data(as_text=True))
+        self.assertIn("Schale 1", self.client("admin").get("/einkauf").get_data(as_text=True))
 
-    def test_others_cannot_set_up_my_item(self):
+    def test_one_bag_can_fill_several_bowls(self):
         self.add(self.client("a"))
         item = self.items()[0]["id"]
-        self.assertEqual(self.post(self.client("b"), "/chips", name="x", flavor_type="BBQ", item_id=item).status_code, 403)
-        self.assertEqual(self.store.read()["chips"], [])
+        self.post(self.client("b"), f"/einkauf/{item}/setup")
+        self.post(self.client("c"), f"/einkauf/{item}/setup")
+        chips = self.store.read()["chips"]
+        self.assertEqual([(c["bowl"], c["added_by"], c["item_id"]) for c in chips], [(1, "b", item), (2, "c", item)])
 
-    def test_deleted_bowl_frees_the_item_again(self):
-        alice = self.client("a")
-        self.add(alice)
-        item = self.items()[0]["id"]
-        self.post(alice, "/chips", name="Ungarisch", flavor_type="Paprika", item_id=item)
-        self.post(alice, f"/chips/{self.store.read()['chips'][0]['id']}/delete")
-        self.assertIn(f"from={item}", alice.get("/").get_data(as_text=True))
+    def test_buyer_may_guess_on_their_bag_but_the_setter_may_not(self):
+        self.add(self.client("a"))
+        self.post(self.client("b"), f"/einkauf/{self.items()[0]['id']}/setup")
+        data = self.store.read()
+        chip = data["chips"][0]
+        guess = {"guess_flavor": "Paprika", "guess_brand": "Funny-Frisch", "scores": {}, "dc": 10}
+        self.assertEqual(stats.guess_points(guess, chip, "a"), 5)
+        self.assertEqual(stats.guess_points(guess, chip, "b"), 0)
 
     def test_list_locks_with_the_ratings(self):
         admin, chips = self.add_chips()
@@ -506,10 +512,19 @@ class ListDetails(Base):
         self.post(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", price="2,99", weight="165", buyer="me")
         item = self.store.read()["shopping"][0]
         self.post(alice, f"/einkauf/{item['id']}/setup")
-        data = self.store.read()
-        chip = data["chips"][0]
+        chip = self.store.read()["chips"][0]
         self.assertEqual((chip["brand"], chip["flavor_type"], chip["price"], chip["weight"]), ("Pringles", "Paprika", 2.99, 165))
-        self.assertEqual(data["shopping"][0]["chip_id"], chip["id"])
+        self.assertEqual(chip["item_id"], item["id"])
+
+    def test_nutrition_travels_from_the_list_into_the_bowl(self):
+        alice = self.client("a")
+        self.post(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", buyer="me")
+        with self.store.edit() as data:
+            data["shopping"][0].update(nutrition={"kcal": 528, "salt": 1.0}, ingredients="Kartoffeln, Öl, Salz")
+        self.assertIn("528", alice.get("/einkauf").get_data(as_text=True))
+        self.post(self.client("b"), f"/einkauf/{self.store.read()['shopping'][0]['id']}/setup")
+        chip = self.store.read()["chips"][0]
+        self.assertEqual((chip["nutrition"]["kcal"], chip["ingredients"]), (528, "Kartoffeln, Öl, Salz"))
 
     def test_incomplete_item_opens_the_filled_form(self):
         alice = self.client("a")
@@ -531,7 +546,7 @@ class ListDetails(Base):
         self.post(self.client("c"), "/einkauf", brand="pringles", flavor_type="Paprika")
         self.assertEqual(len(self.store.read()["shopping"]), 2)
 
-    def test_item_can_be_edited_until_it_is_a_bowl(self):
+    def test_item_stays_editable_after_it_became_a_bowl(self):
         alice = self.client("a")
         self.post(alice, "/einkauf", brand="Pringles", buyer="me")
         item = self.store.read()["shopping"][0]["id"]
@@ -539,8 +554,57 @@ class ListDetails(Base):
         self.assertEqual(self.store.read()["shopping"][0]["flavor_type"], "Paprika")
         self.assertEqual(self.post(self.client("b"), f"/einkauf/{item}", brand="Gehackt").status_code, 403)
         self.post(alice, f"/einkauf/{item}/setup")
-        self.post(alice, f"/einkauf/{item}", brand="Später")
-        self.assertEqual(self.store.read()["shopping"][0]["brand"], "Pringles")
+        self.post(alice, f"/einkauf/{item}", brand="Pringles", flavor_type="Käse")
+        data = self.store.read()
+        self.assertEqual((data["shopping"][0]["flavor_type"], data["chips"][0]["flavor_type"]), ("Käse", "Paprika"))
+
+
+class Import(Base):
+    def send(self, client, payload, confirm="on"):
+        body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
+        return client.post("/admin/import", data={"csrf_token": self.token(client), "confirm": confirm,
+                                                  "file": (io.BytesIO(body), "export.json")},
+                           content_type="multipart/form-data")
+
+    def exported(self):
+        admin, chips = self.add_chips()
+        self.rate(self.client("a"), chips[0]["id"], 12)
+        return admin, json.loads(admin.get("/admin/export.json").get_data(as_text=True))
+
+    def test_export_can_be_edited_and_imported_again(self):
+        admin, data = self.exported()
+        data["chips"][0]["name"] = "Umbenannt"
+        self.post(admin, "/admin/reset", confirm="ASCHE")
+        self.assertEqual(self.send(admin, data).status_code, 302)
+        now = self.store.read()
+        self.assertEqual(now["chips"][0]["name"], "Umbenannt")
+        self.assertEqual(now["ratings"][data["chips"][0]["id"]]["a"]["dc"], 12)
+        self.assertIn("a", self.store.users())
+
+    def test_import_needs_confirmation_and_valid_data(self):
+        admin, data = self.exported()
+        before = self.store.read()
+        for payload, confirm in ((data, ""), (b"{kaputt", "on"), ({"phase": "wild"}, "on"),
+                                 ({**data, "chips": [{"id": 5}]}, "on"),
+                                 ({**data, "ratings": {"x": {"a": {"scores": {}}}}}, "on")):
+            self.send(admin, payload, confirm)
+        self.assertEqual(self.store.read(), before)
+
+    def test_only_the_admin_imports(self):
+        _, data = self.exported()
+        self.assertEqual(self.send(self.client("a"), data).status_code, 403)
+
+    def test_old_exports_are_upgraded(self):
+        admin = self.client("admin")
+        old = {"version": 1, "phase": "tasting", "ceremony_order": [], "reveal_count": 0,
+               "chips": [{"id": "c1", "bowl": 1, "name": "X", "brand": "", "flavor_type": "BBQ", "added_by": "a"}],
+               "ratings": {}, "shopping": [{"id": "i1", "name": "X", "brand": "", "flavor_type": "BBQ",
+                                            "creator": "a", "buyer": "a", "bought": True, "chip_id": "c1"}]}
+        self.send(admin, old)
+        data = self.store.read()
+        self.assertEqual((data["chips"][0]["item_id"], data["chips"][0]["bought_by"]), ("i1", "a"))
+        self.assertNotIn("chip_id", data["shopping"][0])
+        self.assertEqual(self.client("a").get("/einkauf").status_code, 200)
 
 
 class Photos(Base):
@@ -601,7 +665,7 @@ class Photos(Base):
         self.upload(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", buyer="me")
         item = self.store.read()["shopping"][0]
         self.assertEqual(self.client("b").get(f"/bild/{item['image']}").status_code, 200)
-        self.post(alice, f"/einkauf/{item['id']}/setup")
+        self.post(self.client("c"), f"/einkauf/{item['id']}/setup")
         self.assertEqual(self.store.read()["chips"][0]["image"], item["image"])
         # Striking the item keeps the photo, the bowl still uses it.
         self.post(alice, f"/einkauf/{item['id']}/delete")
@@ -940,6 +1004,76 @@ class Stats(unittest.TestCase):
         self.assertEqual(rows["C"]["alignment"]["law"], "chaotic")
         self.assertEqual(rows["C"]["alignment"]["good"], "evil")
         self.assertEqual(rows["A"]["alignment"]["law"], "lawful")
+
+    def bought(self):
+        """Chips x and y came from A's shopping, z from B's. C set every bowl up."""
+        tasting = self.tasting()
+        for chip, buyer in zip(tasting["chips"], ("a", "a", "b")):
+            chip.update(bought_by=buyer, added_by="c")
+        return tasting
+
+    def test_merchants_rank_buyers_by_their_bags(self):
+        result = stats.compute(self.bought(), self.users)
+        merchants = {m["name"]: m for m in result["merchants"]}
+        self.assertAlmostEqual(merchants["A"]["dc"], (41 / 3 + 10) / 2)
+        self.assertEqual(self.award(result, "merchant")["winner"], "A")
+        self.assertEqual(self.award(result, "mimic")["winner"], "B")
+
+    def test_blind_self_love_and_betrayal(self):
+        result = stats.compute(self.bought(), self.users)
+        merchants = {m["name"]: m for m in result["merchants"]}
+        # A gave x a 20 where the rest averaged 10.5, and y a 10 like everyone.
+        self.assertAlmostEqual(merchants["A"]["self_bias"], (9.5 + 0) / 2)
+        self.assertEqual(self.award(result, "self_love")["winner"], "A")
+        self.assertEqual(self.award(result, "traitor")["winner"], "B")
+
+    def test_setting_up_your_own_bag_is_not_blind(self):
+        tasting = self.bought()
+        tasting["chips"][0]["added_by"] = "a"
+        merchants = {m["name"]: m for m in stats.compute(tasting, self.users)["merchants"]}
+        self.assertAlmostEqual(merchants["A"]["self_bias"], 0)
+        self.assertNotIn("added_by_id", stats.compute(tasting, self.users)["chips"][0])
+
+    def test_doubles_reward_a_steady_palate(self):
+        tasting = self.tasting()
+        tasting["chips"][1]["item_id"] = tasting["chips"][2]["item_id"] = "same"
+        result = stats.compute(tasting, self.users)
+        self.assertEqual([b["bowl"] for b in result["doubles"][0]["bowls"]], [2, 3])
+        # A and B gave 10 then 1, C gave 10 then 20.
+        self.assertEqual(self.award(result, "elephant")["winner"], "A & B")
+        self.assertEqual(self.award(result, "shapeshifter")["winner"], "C")
+
+    def test_nutrition_checks_and_awards(self):
+        tasting = self.tasting()
+        facts = [{"kcal": 530, "fat": 33, "salt": 1.5, "protein": 6}, {"kcal": 450, "fat": 18, "salt": 1.0, "protein": 13},
+                 {"kcal": 500, "fat": 25, "salt": 2.5, "protein": 7}]
+        for chip, nutrition in zip(tasting["chips"], facts):
+            chip["nutrition"] = nutrition
+        for chip_id, salt in (("x", 2), ("y", 1), ("z", 5)):
+            for rating in tasting["ratings"][chip_id].values():
+                rating["scores"]["salt"] = salt
+        result = stats.compute(tasting, self.users)
+        checks = {c["key"]: c for c in result["nutrition"]["checks"]}
+        self.assertGreater(checks["salt"]["r"], 0.9)
+        self.assertIn("genauer", checks["salt"]["line"])
+        self.assertEqual(self.award(result, "calorie_bomb")["winner"], "Funny-Frisch X")
+        self.assertEqual(self.award(result, "protein")["winner"], "Lorenz Y")
+        self.assertEqual(self.award(result, "salt_mine")["winner"], "Pringles Z")
+
+    def test_ingredient_count_ignores_sub_lists(self):
+        self.assertEqual(stats.ingredient_count("Kartoffeln, Öl (Sonnenblume, Raps), Gewürze [Paprika, Salz], Salz."), 4)
+        self.assertIsNone(stats.ingredient_count(None))
+
+    def test_house_battle_needs_two_bowls_per_brand(self):
+        tasting = self.tasting()
+        tasting["chips"][1]["brand"] = "funny frisch"
+        tasting["chips"][2]["brand"] = "Funny-Frisch"
+        self.assertEqual(stats.compute(tasting, self.users)["battles"]["house"], [])
+        tasting["chips"].append({**tasting["chips"][1], "id": "w", "bowl": 4, "brand": "Lorenz"})
+        tasting["chips"].append({**tasting["chips"][1], "id": "v", "bowl": 5, "brand": "lorenz"})
+        tasting["ratings"]["w"] = tasting["ratings"]["v"] = tasting["ratings"]["y"]
+        house = stats.compute(tasting, self.users)["battles"]["house"]
+        self.assertEqual({row["label"] for row in house}, {"Funny-Frisch", "Lorenz"})
 
     def test_brand_matching(self):
         self.assertTrue(stats.brand_matches("funny", "Funny-Frisch"))

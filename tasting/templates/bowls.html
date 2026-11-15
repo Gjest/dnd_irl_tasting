@@ -20,33 +20,12 @@
   </form>
 </section>
 {% else %}
-{% if to_set_up and not from_item %}
-<section class="card">
-  <h2>Von deiner Einkaufsliste</h2>
-  <p class="hint">Steht schon alles drin, wird daraus mit einem Tipp eine Schale. Sonst öffnet sich das Formular, schon ausgefüllt.</p>
-  <ul class="my-chips">
-    {% for item in to_set_up %}
-    <li>
-      <span>{{ item|chip_label }}{% if not item.bought %} <small>(noch nicht gekauft)</small>{% endif %}</span>
-      <span class="actions">
-        {% if item.ready %}
-        <form method="post" action="{{ url_for('main.set_up_item', item_id=item.id) }}">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="link-button" type="submit">Aufstellen</button>
-        </form>
-        <a href="{{ url_for('main.home', **{'from': item.id}) }}">Vorher prüfen</a>
-        {% else %}
-        <a href="{{ url_for('main.home', **{'from': item.id}) }}">Aufstellen</a>
-        {% endif %}
-      </span>
-    </li>
-    {% endfor %}
-  </ul>
-</section>
+{% if not from_item %}
+<p class="hint">Am Tisch stellt ihr Chips am einfachsten aus der <a href="{{ url_for('main.shopping') }}">Einkaufsliste</a> auf. Das kann jede und jeder, auch mehrmals dieselbe Tüte.</p>
 {% endif %}
 <details class="card add-chip" {% if from_item %}open{% endif %}>
   <summary>{% if from_item %}{{ from_item|chip_label }} aufstellen{% else %}Chips mitgebracht? Hier eintragen{% endif %}</summary>
-  <p class="hint">Nur du siehst, was in deiner Schale ist. Du bewertest sie mit, bekommst für sie aber keine Orakelpunkte.</p>
+  <p class="hint">Nur du siehst, was in den Schalen ist, die du aufstellst. Du bewertest sie mit, bekommst für sie aber keine Orakelpunkte.</p>
   <form method="post" action="{{ url_for('main.add_chip') }}" class="stack" enctype="multipart/form-data">
     {{ chip_fields(from_item, flavors, csrf_token) }}
     {% if from_item %}<input type="hidden" name="item_id" value="{{ from_item.id }}">{% endif %}

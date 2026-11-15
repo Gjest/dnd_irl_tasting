@@ -39,12 +39,54 @@ def _upgrade(tasting):
     for item in tasting["shopping"]:
         for key in ("price", "weight", "image"):
             item.setdefault(key, None)
+    # Items used to point at one bowl. Now a bowl points at its item, since
+    # one bag can fill several bowls.
+    chips = {chip["id"]: chip for chip in tasting["chips"]}
+    for item in tasting["shopping"]:
+        chip = chips.get(item.pop("chip_id", None))
+        if chip:
+            chip.setdefault("item_id", item["id"])
+    for chip in tasting["chips"]:
+        chip.setdefault("item_id", None)
+        # Whoever set a bowl up used to be whoever bought it.
+        chip.setdefault("bought_by", chip.get("added_by"))
     # Ratings from before the Sucht-Save stored their d20 value as "enjoyment".
     for ratings in tasting["ratings"].values():
         for rating in ratings.values():
             if "enjoyment" in rating:
                 rating["dc"] = rating.pop("enjoyment")
     return tasting
+
+
+PHASES = ("tasting", "ceremony", "revealed")
+
+
+def validate_tasting(data):
+    """Returns what is wrong with an imported tasting, or None if it can be used."""
+    if not isinstance(data, dict):
+        return "Die Datei enthält kein JSON-Objekt."
+    if data.get("phase") not in PHASES:
+        return "Der Spielstand (phase) fehlt oder ist unbekannt."
+    if not isinstance(data.get("chips"), list) or not isinstance(data.get("ratings"), dict):
+        return "Schalen oder Wertungen fehlen."
+    if not isinstance(data.get("shopping", []), list):
+        return "Die Einkaufsliste ist kaputt."
+    if not isinstance(data.get("ceremony_order", []), list) or not isinstance(data.get("reveal_count", 0), int):
+        return "Der Stand der Enthüllung ist kaputt."
+    for chip in data["chips"]:
+        if not isinstance(chip, dict) or not isinstance(chip.get("id"), str) or not isinstance(chip.get("bowl"), int):
+            return "Eine Schale hat keine gültige Id oder Nummer."
+    for item in data.get("shopping", []):
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            return "Ein Eintrag der Einkaufsliste hat keine gültige Id."
+    for ratings in data["ratings"].values():
+        if not isinstance(ratings, dict):
+            return "Eine Wertung ist kaputt."
+        for rating in ratings.values():
+            dc = rating.get("dc", rating.get("enjoyment")) if isinstance(rating, dict) else None
+            if not isinstance(dc, int) or not isinstance(rating.get("scores"), dict):
+                return "Eine Wertung hat keinen DC oder keine Kategorien."
+    return None
 
 
 def write_json_atomic(path, data, private=False):
@@ -91,6 +133,13 @@ class Store:
             write_json_atomic(self.tasting_path, draft)
             self._tasting = draft
             self._backup()
+
+    def replace(self, tasting):
+        """Swaps in a whole tasting, for example an edited export."""
+        tasting = _upgrade({**_empty_tasting(), **tasting})
+        with self.edit() as data:
+            data.clear()
+            data.update(tasting)
 
     def snapshot(self):
         """Backs up right now. Call this before anything that deletes data."""

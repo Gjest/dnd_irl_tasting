@@ -13,7 +13,7 @@
 {% for chip in chips %}
 <details class="card spoiler-card">
   <summary>Schale {{ chip.bowl }}: {{ chip.label }} <small>({{ chip.entries|length }} Wertungen)</small></summary>
-  <p class="hint">Mitgebracht von {{ chip.added_by_name }}</p>
+  <p class="hint">Aufgestellt von {{ chip.added_by_name }}, gekauft von {{ chip.bought_by_name }}</p>
   {% if tasting.phase != 'ceremony' %}
   <form method="post" action="{{ url_for('main.delete_chip', chip_id=chip.id) }}"
         data-confirm="Schale {{ chip.bowl }} mit allen {{ chip.entries|length }} Wertungen löschen?">

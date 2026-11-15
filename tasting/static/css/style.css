@@ -202,6 +202,8 @@ input[type=file]::file-selector-button { margin-right: .7rem; padding: .55rem .9
 .shopping-mine { border-left: 3px solid var(--ember); padding-left: .7rem !important; }
 .shopping-head { display: flex; justify-content: space-between; gap: 1rem; overflow-wrap: anywhere; }
 .shopping-bowl { flex: none; color: var(--brimstone); font-weight: 700; }
+.nutrition { margin-top: .3rem; }
+.nutrition summary { cursor: pointer; color: var(--dust); font-size: .88rem; min-height: 28px; }
 .shopping-meta { margin: .15rem 0 0; color: var(--dust); font-size: .88rem; }
 .entry-list li { padding: .65rem 0; border-top: 1px solid var(--line); }
 .entry-head { display: flex; justify-content: space-between; gap: 1rem; }

@@ -10,6 +10,7 @@ from .catalog import (
     ALIGNMENTS,
     ATTRIBUTES,
     CONDITIONS,
+    NUTRITION_VERDICTS,
     POINTS_BRAND,
     POINTS_FLAVOR,
     PRICE_ADDICTION_VERDICTS,
@@ -23,6 +24,8 @@ EPSILON = 1e-9
 # How far an axis score must leave the middle to count as lawful/chaotic or good/evil.
 ALIGNMENT_THRESHOLD = 0.12
 PRICE_READ_BAR = 0.3
+# A blind DC this far from the rest of the table counts as loving or hating your own bag.
+SELF_BIAS_BAR = 0.5
 
 
 def de(value, digits=1):
@@ -166,7 +169,27 @@ def _chip_stats(chip, ratings):
         "scales": scales,
         "coins": mean(coins) if coins else None,
         "contracts": sum(1 for r in ratings.values() if r.get("contract") is True),
+        "item_id": chip.get("item_id"),
+        "bought_by": chip.get("bought_by", chip.get("added_by")),
+        "nutrition": chip.get("nutrition") or None,
+        "ingredient_count": ingredient_count(chip.get("ingredients")),
     }
+
+
+def ingredient_count(text):
+    """Counts top-level ingredients: "Gewürze (Paprika, Salz)" is one."""
+    if not text:
+        return None
+    count, depth, current = 0, 0, ""
+    for char in text:
+        depth += char in "(["
+        depth -= char in ")]"
+        if char == "," and depth <= 0:
+            count += bool(current.strip())
+            current = ""
+        else:
+            current += char
+    return count + bool(current.strip().rstrip("."))
 
 
 def rank_key(stat):
@@ -308,6 +331,68 @@ def _chip_awards(chips):
     return awards
 
 
+def _award(key, title, line, winners, stat, label=lambda w: w["name"]):
+    return {"key": key, "kind": "player", "title": title, "line": line,
+            "winner": " & ".join(label(w) for w in winners), "stat": stat}
+
+
+def _bonus_awards(chips, players, merchants, drift):
+    """Awards about who bought what, double bowls and the facts on the bag."""
+    awards = []
+    if len(merchants) >= 2:
+        for key, title, line, best in (
+            ("merchant", "Händler der Hölle", "Was diese Person mitbringt, lässt niemanden mehr los.", max),
+            ("mimic", "Mimik-Lieferant", "Sah aus wie Chips, schmeckte wie eine Falle.", min),
+        ):
+            winners, top = _winners(merchants, lambda m: m["dc"], best)
+            awards.append(_award(key, title, line, winners, f"Ø Sucht-DC {de(top)} der Mitbringsel"))
+    biased = [m for m in merchants if m["self_bias"] is not None]
+    if biased:
+        winners, top = _winners(biased, lambda m: m["self_bias"], max)
+        if top >= SELF_BIAS_BAR:
+            awards.append(_award("self_love", "Blindes Eigenlob", "Hat die eigenen Chips nicht erkannt und trotzdem am meisten geliebt.",
+                                 winners, f"{de(top)} DC über dem Rest des Tisches"))
+        winners, top = _winners(biased, lambda m: m["self_bias"], min)
+        if top <= -SELF_BIAS_BAR:
+            awards.append(_award("traitor", "Verrat am eigenen Einkauf", "Hat die selbst gekauften Chips blind verrissen. Ehrlich bis zur Selbstverleugnung.",
+                                 winners, f"{de(abs(top))} DC unter dem Rest des Tisches"))
+    named = {p["id"]: p for p in players}
+    drifting = [named[pid] for pid in drift]
+    if len(drifting) >= 2:
+        winners, top = _winners(drifting, lambda p: drift[p["id"]], min)
+        awards.append(_award("elephant", "Elefantengedächtnis", "Dieselbe Tüte in zwei Schalen, und fast dasselbe Urteil. Gruselig zuverlässig.",
+                             winners, f"Ø {de(top)} DC Unterschied bei Doppelgängern"))
+        winners, top = _winners(drifting, lambda p: drift[p["id"]], max)
+        awards.append(_award("shapeshifter", "Gestaltwandler-Gaumen", "Dieselbe Tüte, zwei Schalen, zwei völlig verschiedene Urteile.",
+                             winners, f"Ø {de(top)} DC Unterschied bei Doppelgängern"))
+
+    known = [c for c in chips if c["nutrition"] and c["dc"] is not None]
+    for key, title, line, value, best, stat in (
+        ("calorie_bomb", "Kalorienbombe von Avernus", "Eine Tüte, ein Tagesbedarf. Zariel wäre stolz.",
+         lambda c: c["nutrition"].get("kcal"), max, lambda v: f"{v:.0f} kcal pro 100 g"),
+        ("protein", "Protein-Paladin", "Die einzige Schale, die als Training zählt.",
+         lambda c: c["nutrition"].get("protein"), max, lambda v: f"{de(v)} g Eiweiß pro 100 g"),
+        ("salt_mine", "Die Salzmine von Minauros", "Wer das isst, braucht einen Eimer Wasser und einen Kleriker.",
+         lambda c: c["nutrition"].get("salt"), max, lambda v: f"{de(v)} g Salz pro 100 g"),
+        ("sin_value", "Sparsamster Sündenfall", "Die meiste Sucht pro Kalorie. Effizient verdammt.",
+         lambda c: c["dc"] / c["nutrition"]["kcal"] * 100 if c["nutrition"].get("kcal") else None, max,
+         lambda v: f"{de(v, 2)} DC pro 100 kcal"),
+    ):
+        if len(known) >= 2:
+            winners, top = _winners(known, value, best)
+            if winners:
+                awards.append({**_award(key, title, line, winners, stat(top), lambda c: c["label"]), "kind": "chip"})
+    listed = [c for c in chips if c["ingredient_count"] and c["dc"] is not None]
+    if len(listed) >= 2:
+        winners, top = _winners(listed, lambda c: c["ingredient_count"], max)
+        awards.append({**_award("alchemist", "Alchemistenküche", "Mehr Zutaten als ein Zaubertrank aus Bels Labor.",
+                                winners, f"{top} Zutaten", lambda c: c["label"]), "kind": "chip"})
+        winners, top = _winners(listed, lambda c: c["ingredient_count"], min)
+        awards.append({**_award("ascetic", "Der Asket", "Kartoffel, Öl, Salz. Mehr braucht ein Mönch nicht.",
+                                winners, f"{top} Zutaten", lambda c: c["label"]), "kind": "chip"})
+    return awards
+
+
 def _price_stats(chips, players, all_ratings):
     """How well blind coin guesses and addiction line up with the real price per 100 g."""
     known = [c for c in chips if c["price_100g"] is not None]
@@ -376,7 +461,7 @@ def _player_alignments(players, per_player, all_ratings):
     return rows
 
 
-def _battle(chips, group_of, min_groups=2):
+def _battle(chips, group_of, min_groups=2, min_chips=1):
     groups = {}
     for chip in chips:
         if chip["dc"] is not None and group_of(chip):
@@ -384,9 +469,93 @@ def _battle(chips, group_of, min_groups=2):
     rows = [
         {"label": label, "value": mean(values), "chips": len(values)}
         for label, values in groups.items()
+        if len(values) >= min_chips
     ]
     rows.sort(key=lambda r: -r["value"])
     return rows if len(rows) >= min_groups else []
+
+
+def _house_battle(chips):
+    """Brands with at least two bowls, spelled as they were first entered."""
+    spelling = {}
+    for chip in chips:
+        if chip["brand"]:
+            spelling.setdefault(normalize_text(chip["brand"]), chip["brand"].strip())
+    return _battle(chips, lambda c: spelling.get(normalize_text(c["brand"])) if c["brand"] else None, min_chips=2)
+
+
+def _merchants(chips, players, all_ratings):
+    """How the bags each person bought did, and how they rated them without knowing."""
+    rows = []
+    for player in players:
+        bought = [c for c in chips if c["bought_by"] == player["id"] and c["dc"] is not None]
+        if not bought:
+            continue
+        bias = []
+        for chip in bought:
+            ratings = all_ratings.get(chip["id"], {})
+            mine = ratings.get(player["id"])
+            others = [r["dc"] for pid, r in ratings.items() if pid != player["id"]]
+            # Only blind ratings count: whoever set the bowl up knew what was in it.
+            if mine and others and chip.get("added_by_id") != player["id"]:
+                bias.append(mine["dc"] - mean(others))
+        rows.append({
+            "id": player["id"],
+            "name": player["name"],
+            "chips": len(bought),
+            "dc": mean(c["dc"] for c in bought),
+            "best": max(bought, key=lambda c: c["dc"])["label"],
+            "self_bias": mean(bias) if bias else None,
+        })
+    rows.sort(key=lambda r: (-r["dc"], r["name"]))
+    return rows
+
+
+def _doubles(chips, players, all_ratings):
+    """Bags that went into more than one bowl: a blind test of every palate's memory."""
+    groups = {}
+    for chip in chips:
+        if chip["item_id"] and chip["dc"] is not None:
+            groups.setdefault(chip["item_id"], []).append(chip)
+    groups = [g for g in groups.values() if len(g) >= 2]
+    drift = {}
+    for player in players:
+        gaps = []
+        for group in groups:
+            values = [all_ratings[c["id"]][player["id"]]["dc"] for c in group if player["id"] in all_ratings.get(c["id"], {})]
+            if len(values) >= 2:
+                gaps.append(max(values) - min(values))
+        if gaps:
+            drift[player["id"]] = mean(gaps)
+    listing = [
+        {"label": group[0]["label"], "bowls": [{"bowl": c["bowl"], "dc": c["dc"]} for c in sorted(group, key=lambda c: c["bowl"])]}
+        for group in groups
+    ]
+    return drift, listing
+
+
+def _nutrition_stats(chips):
+    """Correlations between what the bag says and what the table tasted."""
+    known = [c for c in chips if c["nutrition"] and c["dc"] is not None]
+    pairs = {
+        "salt": lambda c: (c["nutrition"].get("salt"), c["scales"]["salt"]),
+        "fat": lambda c: (c["nutrition"].get("fat"), c["scales"]["grease"]),
+        "kcal": lambda c: (c["nutrition"].get("kcal"), c["dc"]),
+    }
+    checks = []
+    for key, pick in pairs.items():
+        values = [pick(c) for c in known]
+        values = [(a, b) for a, b in values if a is not None]
+        r = pearson([a for a, _ in values], [b for _, b in values]) if len(values) >= MIN_SHARED_FOR_CORRELATION else None
+        if r is not None:
+            checks.append({
+                "key": key,
+                "title": NUTRITION_VERDICTS[key]["title"],
+                "r": r,
+                "chips": len(values),
+                "line": _verdict(NUTRITION_VERDICTS[key]["verdicts"], r),
+            })
+    return {"checks": checks, "chips_with_data": len(known), "min_chips": MIN_SHARED_FOR_CORRELATION}
 
 
 def compute(tasting, users):
@@ -403,7 +572,10 @@ def compute(tasting, users):
     names = {uid: u["name"] for uid, u in users.items()}
 
     chips = [_chip_stats(c, all_ratings.get(c["id"], {})) for c in chips_raw]
+    setters = {c["id"]: c.get("added_by") for c in chips_raw}
     for chip in chips:
+        chip["added_by_id"] = setters[chip["id"]]
+        chip["bought_by_name"] = names.get(chip["bought_by"])
         chip["price_gap"] = None
         rated = chip["dc"] is not None
         chip["tier"] = addiction_tier(chip["dc"]) if rated else None
@@ -509,7 +681,15 @@ def compute(tasting, users):
         scale_averages = {k: mean(c["scales"][k] for c in rated_chips) for k in SCALE_KEYS}
 
     price_reads, pricing = _price_stats(chips, players, all_ratings)
-    awards = _chip_awards(chips) + _player_awards(players, per_player, guessing, price_reads)
+    merchants = _merchants(chips, players, all_ratings)
+    drift, doubles = _doubles(chips, players, all_ratings)
+    awards = (
+        _chip_awards(chips)
+        + _player_awards(players, per_player, guessing, price_reads)
+        + _bonus_awards(chips, players, merchants, drift)
+    )
+    for chip in chips:
+        del chip["added_by_id"]  # who set a bowl up is nobody's business, even afterwards
 
     return {
         "summary": {
@@ -526,7 +706,11 @@ def compute(tasting, users):
         "battles": {
             "flavor": _battle(chips, lambda c: c["flavor_type"]),
             "brand": _battle(chips, lambda c: "Eigenmarke" if c["own_brand"] else "Markenprodukt"),
+            "house": _house_battle(chips),
         },
+        "merchants": [{k: v for k, v in row.items() if k != "id"} for row in merchants],
+        "doubles": doubles,
+        "nutrition": _nutrition_stats(chips),
         "guessing": {"board": guess_board, "points_flavor": POINTS_FLAVOR, "points_brand": POINTS_BRAND},
         "twins": {
             "names": [names[i] for i in ids],

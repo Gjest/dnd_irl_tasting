@@ -25,6 +25,7 @@ from flask import (
 )
 
 from . import images, security, stats
+from .store import validate_tasting
 from .catalog import (
     ADDICTION_TIERS,
     FLAVOR_TYPES,
@@ -33,6 +34,7 @@ from .catalog import (
     MAX_SOUL_COINS,
     MAX_WEIGHT_GRAMS,
     MIN_DC,
+    NUTRITION_LABELS,
     POINTS_BRAND,
     POINTS_FLAVOR,
     SCALE_KEYS,
@@ -147,16 +149,10 @@ def home():
         (c for c in tasting["chips"] if c.get("added_by") == me), key=lambda c: c["bowl"]
     )
     editing = next((c for c in my_chips if c["id"] == request.args.get("edit")), None)
-    # Bought or planned items of mine that aren't a bowl yet, ready to be set up.
-    to_set_up = [
-        {**item, "ready": _ready_for_bowl(item)}
-        for item in tasting["shopping"]
-        if item.get("buyer") == me and _linked_chip(tasting, item) is None
-    ]
-    from_item = next((i for i in to_set_up if i["id"] == request.args.get("from")), None)
+    # Any list item can be set up by anyone, as often as they like.
+    from_item = next((i for i in tasting["shopping"] if i["id"] == request.args.get("from")), None)
     return render_template(
-        "bowls.html", my_chips=my_chips, editing=editing, flavors=FLAVOR_TYPES,
-        to_set_up=to_set_up, from_item=from_item,
+        "bowls.html", my_chips=my_chips, editing=editing, flavors=FLAVOR_TYPES, from_item=from_item,
     )
 
 
@@ -527,16 +523,31 @@ def photo(name):
 # --- Chips ---------------------------------------------------------------
 
 
+# Facts looked up for a list item travel along into every bowl made from it.
+NUTRITION_FIELDS = ("nutrition", "ingredients", "nutrition_source")
+
+
 def _place_chip(data, fields, owner, item=None):
-    """Adds a bowl and returns its number, or None if the table is full."""
+    """Adds a bowl and returns its number, or None if the table is full.
+
+    `added_by` is whoever set the bowl up and therefore knows what is in it.
+    `bought_by` is whoever bought the bag, who stays as blind as everyone else.
+    """
     if len(data["chips"]) >= MAX_CHIPS:
         flash(f"Mehr als {MAX_CHIPS} Schalen überlebt niemand.")
         return None
     bowl = max((c["bowl"] for c in data["chips"]), default=0) + 1
-    chip_id = secrets.token_hex(4)
-    data["chips"].append({"id": chip_id, "bowl": bowl, "added_by": owner, **fields})
+    chip = {
+        "id": secrets.token_hex(4),
+        "bowl": bowl,
+        "added_by": owner,
+        "bought_by": (item.get("buyer") or item.get("creator")) if item else owner,
+        "item_id": item["id"] if item else None,
+        **fields,
+    }
     if item:
-        item.update(chip_id=chip_id, bought=True)
+        chip.update({key: item[key] for key in NUTRITION_FIELDS if item.get(key)})
+    data["chips"].append(chip)
     return bowl
 
 
@@ -557,8 +568,6 @@ def add_chip():
             item = None
             if item_id:
                 item = _find_item(data, item_id)
-                if item.get("buyer") != g.user["id"] or _linked_chip(data, item):
-                    abort(403)
             fields["image"] = _new_photo(item or {}, uploaded)
             placed = _place_chip(data, fields, g.user["id"], item)
     if placed:
@@ -632,11 +641,6 @@ def _find_item(data, item_id):
     abort(404)
 
 
-def _linked_chip(data, item):
-    # A deleted bowl leaves the item as if it had never been set up.
-    return next((c for c in data["chips"] if c["id"] == item.get("chip_id")), None)
-
-
 def _ready_for_bowl(item):
     return item.get("flavor_type") in FLAVOR_TYPES and bool(item.get("name") or item.get("brand"))
 
@@ -671,19 +675,19 @@ def shopping():
     revealed = tasting["phase"] == "revealed"
     items = []
     for item in tasting["shopping"]:
-        chip = _linked_chip(tasting, item)
         may_edit = _may_edit_item(item)
         may_see_details = revealed or may_edit
+        # Not even the buyer learns which bowls came out of their bag.
+        bowls = sorted(c["bowl"] for c in tasting["chips"] if c.get("item_id") == item["id"])
         items.append({
             **item,
             "label": stats.chip_label(item),
             "creator_name": names.get(item.get("creator"), "unbekannt"),
             "buyer_name": names.get(item.get("buyer")) if item.get("buyer") else None,
-            "bowl": chip["bowl"] if chip and may_see_details else None,
-            "set_up": bool(chip) and may_see_details,
+            "bowls": bowls if revealed or _is_admin() else [],
             "mine": item.get("buyer") == me,
             "ready": _ready_for_bowl(item),
-            "may_edit": may_edit and not chip,
+            "may_edit": may_edit,
             "may_see_details": may_see_details,
             "price_100g": stats.price_per_100g(item),
             "may_delete": _is_admin() or me in (item.get("creator"), item.get("buyer")),
@@ -696,6 +700,7 @@ def shopping():
     editing = next((i for i in items if i["id"] == request.args.get("edit") and i["may_edit"]), None)
     return render_template(
         "shopping.html", groups=groups, count=len(items), flavors=FLAVOR_TYPES, editing=editing,
+        nutrition_labels=NUTRITION_LABELS,
         open_phase=tasting["phase"] == "tasting", is_player=g.user["role"] == "player",
     )
 
@@ -756,8 +761,6 @@ def update_item(item_id):
             abort(403)
         if not _require_tasting_phase(data):
             pass
-        elif _linked_chip(data, item):
-            flash("Das steht schon als Schale auf dem Tisch. Ändere es dort.")
         else:
             twin, _ = _duplicate_item(data, fields, skip=item)
             if twin:
@@ -773,11 +776,9 @@ def update_item(item_id):
 @bp.post("/einkauf/<item_id>/setup")
 @login_required
 def set_up_item(item_id):
-    """Turns a complete list item into a bowl in one step."""
+    """Turns a complete list item into a bowl in one step. Anyone may, any number of times."""
     with store().edit() as data:
         item = _find_item(data, item_id)
-        if item.get("buyer") != g.user["id"] or _linked_chip(data, item):
-            abort(403)
         if not _require_tasting_phase(data):
             return redirect(url_for("main.shopping"))
         if not _ready_for_bowl(item):
@@ -817,9 +818,6 @@ def _claim_item(data, item):
 def _release_item(data, item):
     if item.get("buyer") != g.user["id"]:
         abort(403)
-    if _linked_chip(data, item):
-        flash("Das steht schon als Schale auf dem Tisch.")
-        return
     item.update(buyer=None, bought=False)
     flash("Freigegeben. Jetzt darf jemand anderes.")
 
@@ -827,9 +825,6 @@ def _release_item(data, item):
 def _toggle_bought(data, item):
     if item.get("buyer") != g.user["id"]:
         abort(403)
-    if _linked_chip(data, item):
-        flash("Das steht schon als Schale auf dem Tisch.")
-        return
     item["bought"] = not item.get("bought")
 
 
@@ -897,6 +892,7 @@ def admin_data():
             **chip,
             "label": stats.chip_label(chip),
             "added_by_name": names.get(chip.get("added_by"), "unbekannt"),
+            "bought_by_name": names.get(chip.get("bought_by"), "unbekannt"),
             "entries": sorted(
                 (
                     {"id": pid, "name": names.get(pid, pid), **rating}
@@ -1005,6 +1001,32 @@ def admin_export_json():
     )
 
 
+@bp.post("/admin/import")
+@admin_required
+def admin_import():
+    """Replaces the tasting with an uploaded JSON export, e.g. after editing it by hand."""
+    upload = request.files.get("file")
+    if request.form.get("confirm") != "on":
+        flash("Nichts eingespielt. Bestätige erst, dass alles ersetzt werden darf.")
+        return redirect(url_for("main.admin"))
+    try:
+        imported = json.loads(upload.read().decode("utf-8")) if upload and upload.filename else None
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        imported = None
+    problem = "Das ist keine lesbare JSON-Datei." if imported is None else validate_tasting(imported)
+    if problem:
+        flash(f"Nichts eingespielt. {problem}")
+        return redirect(url_for("main.admin"))
+    store().snapshot()
+    store().replace(imported)
+    data = store().read()
+    flash(
+        f"Eingespielt: {len(data['chips'])} Schalen, {len(data['shopping'])} Einträge auf der Einkaufsliste "
+        f"und {sum(len(r) for r in data['ratings'].values())} Wertungen. Der alte Stand liegt in data/backups."
+    )
+    return redirect(url_for("main.admin"))
+
+
 def _csv_safe(value):
     # Spreadsheets run cells starting with these as formulas.
     if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
@@ -1020,7 +1042,7 @@ def admin_export_csv():
     out = io.StringIO()
     writer = csv.writer(out, delimiter=";")
     writer.writerow(
-        ["schale", "chips", "marke", "geschmack", "eigenmarke", "preis", "gewicht_g", "preis_100g", "mitgebracht_von", "wer", "sucht_dc"]
+        ["schale", "chips", "marke", "geschmack", "eigenmarke", "preis", "gewicht_g", "preis_100g", "aufgestellt_von", "gekauft_von", "wer", "sucht_dc"]
         + SCALE_KEYS
         + ["preis_schaetzung_muenzen", "vertrag", "tipp_geschmack", "tipp_marke", "orakelpunkte", "notizen"]
     )
@@ -1030,6 +1052,7 @@ def admin_export_csv():
                 chip["bowl"], chip["name"], chip.get("brand"), chip.get("flavor_type"),
                 bool(chip.get("own_brand")), chip.get("price"), chip.get("weight"), stats.price_per_100g(chip),
                 users.get(chip.get("added_by"), {}).get("name", ""),
+                users.get(chip.get("bought_by"), {}).get("name", ""),
                 users.get(pid, {}).get("name", pid), r["dc"],
             ]
             row += [r["scores"].get(k) for k in SCALE_KEYS]

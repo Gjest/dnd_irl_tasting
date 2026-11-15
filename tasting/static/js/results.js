@@ -248,6 +248,10 @@ function renderBattles() {
   panel.append(flavor.length
     ? bars(flavor.map((r) => ({ label: r.label, detail: `${r.chips} Schalen`, value: r.value, valueText: fmt(r.value) })), 20)
     : emptyNote("Für diese Schlacht braucht es mindestens zwei Geschmacksrichtungen."));
+  panel.append(el("h3", "", "Häuserkrieg der Marken"));
+  panel.append(data.battles.house.length
+    ? bars(data.battles.house.map((r) => ({ label: r.label, detail: `${r.chips} Schalen`, value: r.value, valueText: fmt(r.value) })), 20)
+    : emptyNote("Dafür braucht es zwei Marken mit je mindestens zwei Schalen."));
   panel.append(el("h3", "", "Markenprodukt gegen Eigenmarke"));
   panel.append(brand.length
     ? bars(brand.map((r) => ({ label: r.label, detail: `${r.chips} Schalen`, value: r.value, valueText: fmt(r.value) })), 20)
@@ -405,6 +409,56 @@ function renderSheets() {
   panel.append(grid);
 }
 
+function renderMerchants() {
+  panel.append(heading("Die Händler", "Wer hat die besten Tüten angeschleppt? Gezählt wird der Sucht-DC aller Schalen aus den eigenen Einkäufen. „Blind“ zeigt, wie viel höher oder tiefer jemand die selbst gekauften Chips bewertet hat als der Rest des Tisches, ohne zu wissen, dass sie es waren."));
+  if (!data.merchants.length) {
+    panel.append(emptyNote("Keine Schale lässt sich einem Einkauf zuordnen."));
+  } else {
+    panel.append(bars(data.merchants.map((m) => ({
+      label: m.name,
+      detail: `${m.chips} Schalen · bestes Mitbringsel: ${m.best}`,
+      value: m.dc,
+      valueText: fmt(m.dc),
+    })), 20));
+    panel.append(table(
+      ["Wer", "Schalen", "Ø DC", "Blind"],
+      data.merchants.map((m) => [m.name, String(m.chips), fmt(m.dc), m.self_bias === null ? "–" : `${m.self_bias >= 0 ? "+" : "−"}${fmt(Math.abs(m.self_bias))}`]),
+      [1, 2, 3],
+    ));
+  }
+  panel.append(el("h3", "", "Doppelgänger"));
+  if (!data.doubles.length) {
+    panel.append(emptyNote("Keine Tüte stand zweimal auf dem Tisch."));
+    return;
+  }
+  panel.append(el("p", "hint", "Diese Tüten standen mehrmals auf dem Tisch. Hat die Gruppe es gemerkt?"));
+  panel.append(table(
+    ["Chips", "Schalen und Ø DC"],
+    data.doubles.map((d) => [d.label, d.bowls.map((b) => `Schale ${b.bowl}: ${fmt(b.dc)}`).join(" · ")]),
+  ));
+}
+
+function renderNutrition() {
+  const nutrition = data.nutrition;
+  panel.append(heading("Nährwerte", "Was auf der Packung steht, gegen das, was ihr geschmeckt habt. Quelle: Open Food Facts, pro 100 g."));
+  if (nutrition.checks.length) {
+    const callouts = el("div", "callouts");
+    for (const check of nutrition.checks) callouts.append(verdictBox(check.title, check.r, check.line));
+    panel.append(callouts);
+  } else {
+    panel.append(emptyNote(`Für Vergleiche braucht es mindestens ${nutrition.min_chips} Schalen mit Nährwerten.`));
+  }
+  const rows = data.chips.filter((c) => c.dc !== null && c.nutrition);
+  if (!rows.length) return;
+  const value = (chip, key, digits) => (chip.nutrition[key] === null || chip.nutrition[key] === undefined ? "–" : fmt(chip.nutrition[key], digits));
+  panel.append(table(
+    ["Chips", "kcal", "Fett", "Salz", "Eiweiß", "Zutaten", "Ø DC"],
+    rows.map((c) => [c.label, value(c, "kcal", 0), value(c, "fat", 1), value(c, "salt", 1), value(c, "protein", 1),
+      c.ingredient_count === null ? "–" : String(c.ingredient_count), fmt(c.dc)]),
+    [1, 2, 3, 4, 5, 6],
+  ));
+}
+
 function renderOracle() {
   const g = data.guessing;
   panel.append(heading("Das Orakel", `Blinde Tipps: ${g.points_flavor} Punkte für den Geschmack, ${g.points_brand} für die Marke. Eigene Chips zählen nicht.`));
@@ -486,6 +540,8 @@ const TABS = [
   ["Zwillinge", renderTwins],
   ["Schlachten", renderBattles],
   ["Seelenmünzen", renderCoins],
+  ["Händler", renderMerchants],
+  ["Nährwerte", renderNutrition],
   ["Orakel", renderOracle],
   ["Tops & Flops", renderTops],
   ["Notizen", renderNotes],

@@ -35,7 +35,7 @@ Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_
 
 ## During the tasting
 
-1. **Shopping:** under "Einkauf" everyone sees one shared list of who buys which bag. Exact duplicates are refused, and similar names get a warning. A wish without a buyer can be claimed with "Ich kaufe das". An item takes everything a bowl needs, including price, weight and a photo. Price and weight stay visible only to the buyer and the admin. If brand or name and the flavor are filled in, "Als Schale aufstellen" turns the item into a bowl in one tap. Otherwise the bowl form opens with everything filled in. Only the buyer and the admin see which bowl it became until the reveal. Everyone knows which chips are in the game, so guessing the brand is easier. If players set up bowls one after another, others could match bowl numbers to the list, so press "Schalen mischen" before the first rating.
+1. **Shopping:** under "Einkauf" everyone sees one shared list of who buys which bag. Exact duplicates are refused, and similar names get a warning. A wish without a buyer can be claimed with "Ich kaufe das". An item takes everything a bowl needs, including price, weight and a photo. Price and weight stay visible only to the buyer and the admin. At the tasting, anyone can turn any item into a bowl with "Als Schale aufstellen", and the same bag can go on the table more than once. If brand or name and the flavor are filled in, that takes one tap. Otherwise the bowl form opens with everything filled in. Only whoever set a bowl up knows what is in it and gets no guessing points for it. The buyer stays as blind as everyone else, and the list never says which items became bowls. Only the admin sees that until the reveal. Everyone knows which chips are in the game, so guessing the brand is easier.
 2. **Before:** everyone adds the chips they brought under "Chips mitgebracht?" on their bowls page, ideally with price and bag weight so that prices compare per 100 g. A name is optional: "Pringles" plus "Paprika" is enough. Only the person who added a chip and the admin can see what's in that bowl.
 3. **Tasting:** players rate every bowl, including their own, and can change a rating until the reveal. The ranking comes from the Sucht-Save: turn the 3D d20 to how hard it is to stop eating (DC 1 to 20). On your own bowls you can't guess the flavor, brand or price. Everyone sees who is still missing which bowl, but no scores.
 4. **Reveal:** press "Enthüllung starten" and click through on the big screen. This locks ratings. "Wertung wieder öffnen" undoes it without losing anything.
@@ -51,6 +51,8 @@ The Admin login can open "Datenpflege" on the admin page. It shows all ratings i
 | Wertung löschen | Removes one person's rating of one bowl |
 | Ganze Schale löschen | Removes a bowl and all its ratings |
 | Alles niederbrennen | Removes all bowls and ratings, keeps logins and the shopping list. Type `ASCHE` to confirm. |
+
+| Daten einspielen | On the admin page: replaces bowls, ratings and the shopping list with a JSON file, e.g. an edited JSON download. Logins and photos stay. |
 
 Each of these saves a backup to `data/backups/` first. To restore one, stop the container and copy it over `data/tasting.json`. Deleting isn't possible during a running reveal. After the reveal, the ranking updates itself.
 
@@ -84,7 +86,7 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | `data/users.json` | Names and passphrase hashes |
 | `data/secret.key` | Signs the login cookies. Deleting it logs everyone out. |
 
-The admin page also offers CSV and JSON downloads, which never contain passphrases. Starting a new tasting: stop the container and move `data/tasting.json` somewhere else.
+The admin page also offers CSV and JSON downloads, which never contain passphrases. A JSON download can be edited and loaded again under "Daten einspielen". List items and bowls may carry `nutrition` (per 100 g: `kcal`, `fat`, `saturated_fat`, `carbs`, `sugar`, `fiber`, `protein`, `salt`), `ingredients` and `nutrition_source`. The list shows them, a bowl takes them over when it is set up, and the results compare them with the ratings. Starting a new tasting: stop the container and move `data/tasting.json` somewhere else.
 
 To change what gets rated, edit `tasting/catalog.py` and run `docker compose up -d --build`. Don't rename keys once ratings exist.
 

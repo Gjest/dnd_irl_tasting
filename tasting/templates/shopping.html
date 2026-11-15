@@ -4,7 +4,7 @@
 {% block content %}
 <p class="eyebrow">Vorbereitung für den Abstieg</p>
 <h1>Die Einkaufsliste</h1>
-<p class="lead">Wer bringt was mit? Alle sehen diese Liste, damit keine Tüte doppelt auf dem Tisch landet. Welche Schale daraus wird, sieht nur, wer sie kauft.</p>
+<p class="lead">Wer bringt was mit? Alle sehen diese Liste, damit keine Tüte doppelt gekauft wird. Am Tisch stellt jede und jeder daraus Schalen auf, auch mehrmals dieselbe Tüte. Welche Schale woraus wurde, sieht nur, wer sie aufstellt.</p>
 
 {% if editing %}
 <section class="card">
@@ -45,13 +45,23 @@
   <li class="{% if item.mine %}shopping-mine{% endif %}">
     <div class="shopping-head">
       <span class="with-thumb">{% if item.image %}<img class="thumb thumb-small" src="{{ url_for('main.photo', name=item.image) }}" alt="" width="40" height="40">{% endif %}<b>{{ item.label }}</b></span>
-      {% if item.set_up %}<span class="shopping-bowl">{% if item.bowl %}Schale {{ item.bowl }}{% endif %}</span>{% endif %}
+      {% if item.bowls %}<span class="shopping-bowl">Schale {{ item.bowls|join(', ') }}</span>{% endif %}
     </div>
     <p class="shopping-meta">
       {% if item.flavor_type and item.name %}{{ item.flavor_type }} · {% endif %}{% if item.own_brand %}Eigenmarke · {% endif %}
       {% if item.buyer_name %}kauft {{ item.buyer_name }}{% else %}gewünscht von {{ item.creator_name }}{% endif %}
       {% if item.may_see_details and item.price is not none %}· {{ '%.2f'|format(item.price)|replace('.', ',') }} €{% if item.price_100g is not none %} ({{ '%.2f'|format(item.price_100g)|replace('.', ',') }} €/100 g){% endif %}{% endif %}
     </p>
+    {% if item.nutrition or item.ingredients %}
+    <details class="nutrition">
+      <summary>Nährwerte und Zutaten</summary>
+      {% if item.nutrition %}
+      <p class="shopping-meta">Pro 100 g: {% for key, label, unit in nutrition_labels if item.nutrition.get(key) is not none %}{{ label }} {{ ('%g'|format(item.nutrition.get(key)))|replace('.', ',') }} {{ unit }}{% if not loop.last %} · {% endif %}{% endfor %}</p>
+      {% endif %}
+      {% if item.ingredients %}<p class="shopping-meta">{{ item.ingredients }}</p>{% endif %}
+      {% if item.nutrition_source %}<p class="shopping-meta">Quelle: Open Food Facts, Code {{ item.nutrition_source.rsplit('/', 1)[-1] }}</p>{% endif %}
+    </details>
+    {% endif %}
     {% if open_phase %}
     <div class="actions">
       {% if is_player and not item.buyer %}
@@ -60,19 +70,21 @@
         <button class="link-button" type="submit">Ich kaufe das</button>
       </form>
       {% endif %}
-      {% if item.mine and not item.set_up %}
-      <form method="post" action="{{ url_for('main.toggle_bought', item_id=item.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <button class="link-button" type="submit">{% if item.bought %}Doch noch nicht gekauft{% else %}Gekauft{% endif %}</button>
-      </form>
+      {% if is_player %}
       {% if item.ready %}
-      <form method="post" action="{{ url_for('main.set_up_item', item_id=item.id) }}">
+      <form method="post" action="{{ url_for('main.set_up_item', item_id=item.id) }}" data-confirm="{{ item.label }} jetzt als neue Schale aufstellen?">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link-button" type="submit">Als Schale aufstellen</button>
       </form>
       {% else %}
       <a href="{{ url_for('main.home', **{'from': item.id}) }}">Als Schale aufstellen</a>
       {% endif %}
+      {% endif %}
+      {% if item.mine %}
+      <form method="post" action="{{ url_for('main.toggle_bought', item_id=item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">{% if item.bought %}Doch noch nicht gekauft{% else %}Gekauft{% endif %}</button>
+      </form>
       <form method="post" action="{{ url_for('main.release_item', item_id=item.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link-button" type="submit">Abgeben</button>

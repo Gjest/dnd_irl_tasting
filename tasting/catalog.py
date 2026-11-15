@@ -128,6 +128,34 @@ PRICE_GUESS_VERDICTS = [
     {"from": -0.3, "line": "Reiner Zufall. Ihr hättet genauso gut würfeln können."},
     {"from": -1.01, "line": "Je billiger, desto edler kam es euch vor. Das Marketing hat eure Seelen längst."},
 ]
+# Real nutrition against what the table tasted. Same shape as the price verdicts.
+NUTRITION_VERDICTS = {
+    "salt": {
+        "title": "Salzzunge",
+        "verdicts": [
+            {"from": 0.5, "line": "Eure Zungen messen Salz genauer als jede Packungsangabe."},
+            {"from": -0.2, "line": "Gefühlt salzig und wirklich salzig haben nichts miteinander zu tun."},
+            {"from": -1.01, "line": "Je mehr Salz drin ist, desto fader kam es euch vor. Die Zungen sind verflucht."},
+        ],
+    },
+    "fat": {
+        "title": "Styx-Messgerät",
+        "verdicts": [
+            {"from": 0.5, "line": "Eure Finger wissen genau, wie viel Fett drin ist."},
+            {"from": -0.2, "line": "Das Fett auf der Packung und das an den Fingern sind zwei verschiedene Flüsse."},
+            {"from": -1.01, "line": "Die fettesten Chips kamen euch am trockensten vor. Illusionsmagie."},
+        ],
+    },
+    "kcal": {
+        "title": "Machen Kalorien süchtig?",
+        "verdicts": [
+            {"from": 0.5, "line": "Je mehr Kalorien, desto höher der DC. Der Körper weiß, was er will."},
+            {"from": -0.2, "line": "Kalorien und Sucht gehen getrennte Wege."},
+            {"from": -1.01, "line": "Die leichten Chips machen am süchtigsten. Ein Trick von Mammon?"},
+        ],
+    },
+}
+
 PRICE_ADDICTION_VERDICTS = [
     {"from": 0.5, "line": "Teuer macht süchtig. Mammon reibt sich die Hände."},
     {"from": -0.3, "line": "Preis und Sucht haben nichts miteinander zu tun. Der Discounter lacht."},
@@ -147,6 +175,18 @@ FLAVOR_TYPES = [
 ]
 
 MAX_SOUL_COINS = 10
+# Per 100 g, as looked up on Open Food Facts: key, label, unit.
+NUTRITION_LABELS = [
+    ("kcal", "Energie", "kcal"),
+    ("fat", "Fett", "g"),
+    ("saturated_fat", "davon gesättigt", "g"),
+    ("carbs", "Kohlenhydrate", "g"),
+    ("sugar", "davon Zucker", "g"),
+    ("fiber", "Ballaststoffe", "g"),
+    ("protein", "Eiweiß", "g"),
+    ("salt", "Salz", "g"),
+]
+
 MAX_NOTES_LENGTH = 1000
 MAX_WEIGHT_GRAMS = 5000
 

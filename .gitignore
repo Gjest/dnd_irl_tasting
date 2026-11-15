@@ -7,3 +7,6 @@ __pycache__/
 .venv/
 .pytest_cache/
 .idea/
+# Exports from the server hold real names and ratings.
+/export/
+/chips-tasting*.json

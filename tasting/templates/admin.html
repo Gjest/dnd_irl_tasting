@@ -76,7 +76,7 @@
         <tr>
           <td>{{ chip.bowl }}</td>
           <td>{{ chip|chip_label }}{% if chip.own_brand %} <small>(Eigenmarke)</small>{% endif %}</td>
-          <td>{{ adders.get(chip.added_by, '–') }}</td>
+          <td>{{ adders.get(chip.added_by, '–') }}{% if chip.bought_by and chip.bought_by != chip.added_by %} <small>(gekauft: {{ adders.get(chip.bought_by, '–') }})</small>{% endif %}</td>
           <td>{{ chip.flavor_type }}</td>
           <td class="num">{{ ('%.2f'|format(chip.price)|replace('.', ',')) ~ ' €' if chip.price is not none else '–' }}</td>
           <td class="num">{{ ('%.2f'|format(chip.price / chip.weight * 100)|replace('.', ',')) ~ ' €' if chip.price is not none and chip.weight else '–' }}</td>
@@ -107,5 +107,18 @@
     <a class="button" href="{{ url_for('main.admin_export_csv') }}">CSV herunterladen</a>
     <a class="button" href="{{ url_for('main.admin_export_json') }}">JSON herunterladen</a>
   </div>
+</section>
+
+<section class="card card-danger">
+  <h2>Daten einspielen</h2>
+  <p class="hint">Ersetzt Schalen, Wertungen und Einkaufsliste durch eine JSON-Datei, zum Beispiel einen bearbeiteten Export von oben. Logins und Fotos bleiben, wie sie sind. Vorher landet eine Sicherung in <code>data/backups</code>.</p>
+  <form method="post" action="{{ url_for('main.admin_import') }}" class="stack" enctype="multipart/form-data"
+        data-confirm="Wirklich alles durch diese Datei ersetzen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>JSON-Datei</span>
+      <input type="file" name="file" accept="application/json,.json" required></label>
+    <label class="check"><input type="checkbox" name="confirm" required> Ja, der aktuelle Stand wird ersetzt</label>
+    <button class="button button-danger" type="submit">Einspielen</button>
+  </form>
 </section>
 {% endblock %}
