@@ -1,15 +1,17 @@
-{% extends "base.html" %}
-{% block title %}Fehler {{ code }} · Blutkrieg der Chips{% endblock %}
+{% extends "master.html" %}
+{% block title %}Fehler {{ code }} · Verkostungen{% endblock %}
 {% block content %}
-<section class="center-note">
-  <p class="eyebrow">Fehler {{ code }}</p>
-  <h1>Kritischer Patzer</h1>
-  <p class="lead">
-    {% if code == 403 %}Dieses Tor bleibt dir verschlossen. Falls du nur lange gewartet hast: Seite neu laden und noch mal versuchen.
-    {% elif code == 404 %}Hier gibt es nur Asche.
-    {% elif code == 413 %}Das ist zu viel Text, selbst für einen Barden.
-    {% else %}Diese Anfrage versteht hier unten niemand.{% endif %}
+<section class="m-card">
+  <p class="m-eyebrow">Fehler {{ code }}</p>
+  <h1 class="m-title">
+    {% if code == 403 %}Kein Zutritt{% elif code == 404 %}Nicht gefunden{% elif code == 413 %}Zu groß{% else %}Das hat nicht geklappt{% endif %}
+  </h1>
+  <p class="m-lead">
+    {% if code == 403 %}Diese Seite ist nicht für dich. Falls du nur lange gewartet hast: Seite neu laden und noch einmal versuchen.
+    {% elif code == 404 %}Diese Seite gibt es nicht.
+    {% elif code == 413 %}Die Anfrage ist zu groß.
+    {% else %}Diese Anfrage konnte nicht verarbeitet werden.{% endif %}
   </p>
-  <a class="button" href="{{ url_for('main.home') }}">Zurück</a>
+  <a class="m-button" href="{{ url_for('core.landing') }}">Zur Übersicht</a>
 </section>
 {% endblock %}

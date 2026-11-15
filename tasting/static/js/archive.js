@@ -1,6 +1,6 @@
 "use strict";
 
-// Results of an archived tasting. Everything, down to the questions, comes
+// Results of a finished tasting. Everything, down to the questions, comes
 // from the archive file, so this one page serves every past tasting.
 
 const panel = document.getElementById("panel");
@@ -83,7 +83,7 @@ function renderXray() {
             label: row.name,
             data: list.map((c) => row.averages[c.key]),
             borderColor: SERIES_CHIP,
-            backgroundColor: "rgba(220, 106, 18, .22)",
+            backgroundColor: SERIES_FILL,
             pointBackgroundColor: SERIES_CHIP,
             borderWidth: 2,
             pointRadius: 3,
@@ -117,7 +117,7 @@ function renderXray() {
             ticks: { stepSize: 1, backdropColor: "transparent", color: TEXT },
             grid: { color: GRID },
             angleLines: { color: GRID },
-            pointLabels: { color: "#efe4d2", font: { size: 10 } },
+            pointLabels: { color: LABEL, font: { size: 10 } },
           },
         },
       },
@@ -272,9 +272,11 @@ function renderSummary() {
 
 async function start() {
   try {
-    data = await getJson(panel.dataset.archiveUrl);
+    data = await getJson(panel.dataset.resultsUrl);
   } catch (err) {
-    document.getElementById("load-error").hidden = false;
+    const box = document.getElementById("load-error");
+    box.textContent = `Die Ergebnisse ließen sich nicht laden (${err.message}). Lade die Seite neu.`;
+    box.hidden = false;
     return;
   }
   renderSummary();

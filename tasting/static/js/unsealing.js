@@ -16,7 +16,7 @@ function card(chip, isNew) {
   const name = el("div");
   if (chip.image) {
     const photo = el("img", "reveal-photo");
-    photo.src = `/bild/${encodeURIComponent(chip.image)}`;
+    photo.src = `${APP_BASE}bild/${encodeURIComponent(chip.image)}`;
     photo.alt = "";
     name.append(photo);
   }
@@ -51,9 +51,9 @@ function render(data) {
 
 async function refresh() {
   try {
-    const data = await getJson("/api/ceremony");
+    const data = await getJson(`${APP_BASE}api/ceremony`);
     if (data.phase === "tasting") {
-      window.location.href = "/";
+      window.location.href = APP_BASE;
       return;
     }
     render(data);

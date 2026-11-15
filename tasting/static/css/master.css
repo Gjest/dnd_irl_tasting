@@ -1,0 +1,115 @@
+/* The neutral frame around all tastings: login, start page, errors.
+   Each tasting brings its own look once you are inside it. */
+
+@font-face { font-family: Lato; font-weight: 400; font-display: swap; src: url(../fonts/lato-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: Lato; font-weight: 700; font-display: swap; src: url(../fonts/lato-latin-700-normal.woff2) format("woff2"); }
+
+:root {
+  color-scheme: light dark;
+  --bg: #f4f4f6;
+  --surface: #ffffff;
+  --text: #17181c;
+  --muted: #5c606b;
+  --line: #dcdde3;
+  --accent: #3355dd;
+  --danger: #c0352b;
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(20, 22, 30, .06), 0 8px 24px -12px rgba(20, 22, 30, .18);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111215;
+    --surface: #1b1c21;
+    --text: #ecedf0;
+    --muted: #a2a6b1;
+    --line: #2e3038;
+    --accent: #8ea4ff;
+    --danger: #ff8a80;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 28px -14px rgba(0, 0, 0, .7);
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font: 400 16px/1.5 Lato, system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--accent); }
+code { padding: .1em .35em; border-radius: 4px; background: var(--line); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.m-header {
+  position: sticky; top: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: .8rem 16px;
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.m-brand { font-weight: 700; font-size: 1.05rem; color: var(--text); text-decoration: none; letter-spacing: .01em; }
+.m-user { display: flex; align-items: center; gap: .8rem; margin: 0; color: var(--muted); font-size: .92rem; }
+.m-link { padding: 0; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.m-page { max-width: 980px; margin: 0 auto; padding: 1.8rem 16px 4rem; }
+
+.m-title { margin: 0; font-size: clamp(1.7rem, 5vw, 2.4rem); line-height: 1.15; letter-spacing: -.01em; }
+.m-lead { margin: .4rem 0 1.6rem; color: var(--muted); font-size: 1.05rem; }
+.m-eyebrow { margin: 0 0 .3rem; color: var(--muted); font-size: .8rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.m-flash { margin: 0 0 1rem; padding: .7rem .9rem; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); }
+.m-flash-error { border-color: var(--danger); color: var(--danger); }
+
+.m-card { max-width: 440px; margin: 4vh auto 0; padding: 1.6rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.m-stack { display: flex; flex-direction: column; gap: 1rem; }
+.m-field { display: block; }
+.m-field > span { display: block; margin-bottom: .35rem; font-weight: 700; font-size: .95rem; }
+.m-field input, .m-field select {
+  width: 100%; min-height: 46px; padding: .6rem .75rem;
+  font: 400 1rem Lato, system-ui, sans-serif; color: var(--text);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+}
+.m-field input:focus, .m-field select:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: var(--accent); }
+.m-check { display: flex; align-items: center; gap: .5rem; color: var(--muted); cursor: pointer; }
+.m-check input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+.m-button {
+  display: inline-block; min-height: 46px; padding: .7rem 1.2rem;
+  font: 700 1rem Lato, system-ui, sans-serif; color: #fff; text-align: center; text-decoration: none;
+  background: var(--accent); border: 0; border-radius: 10px; cursor: pointer;
+}
+@media (prefers-color-scheme: dark) { .m-button { color: #0d1020; } }
+
+/* Tiles, like on a phone's home screen. Each tasting has its own colors. */
+.tiles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 1rem; }
+.app-tile {
+  --tile-a: #444; --tile-b: #222; --tile-text: #fff;
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: .25rem; min-height: 230px; padding: 1.2rem;
+  color: var(--tile-text); text-decoration: none;
+  background: linear-gradient(145deg, var(--tile-a), var(--tile-b));
+  border-radius: 22px; box-shadow: var(--shadow);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.app-tile::after {
+  content: ""; position: absolute; inset: auto -30% -55% auto; width: 75%; aspect-ratio: 1;
+  border-radius: 50%; background: rgba(255, 255, 255, .09); pointer-events: none;
+}
+.app-tile:hover, .app-tile:focus-visible { transform: translateY(-3px) scale(1.01); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .55); }
+.app-tile:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.app-tile-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: auto; }
+.app-tile-icon {
+  display: grid; place-items: center; width: 64px; height: 64px; font-size: 2.2rem;
+  background: rgba(255, 255, 255, .16); border-radius: 18px;
+}
+.app-tile-status { padding: .2rem .65rem; font-size: .78rem; font-weight: 700; border-radius: 999px; background: rgba(0, 0, 0, .25); }
+.app-tile-live .app-tile-status { background: #fff; color: #111; }
+.app-tile-number { margin-top: 1rem; font-size: .78rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .8; }
+.app-tile-title { font-size: 1.45rem; font-weight: 700; line-height: 1.2; }
+.app-tile-tagline { opacity: .88; font-size: .95rem; }
+.app-tile-facts { margin-top: .4rem; font-size: .88rem; opacity: .8; }
+.app-tile-winner { font-size: .92rem; font-weight: 700; }
+
+.app-tile-chips { --tile-a: #8a2414; --tile-b: #1c0d09; }
+.app-tile-cola { --tile-a: #d42a2a; --tile-b: #5a0d12; }
+.app-tile-wasser { --tile-a: #2f9ad8; --tile-b: #0b3a63; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-tile { transition: none; }
+  .app-tile:hover, .app-tile:focus-visible { transform: none; }
+}

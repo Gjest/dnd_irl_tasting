@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Verkostungen{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/master.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+<body>
+  <header class="m-header">
+    <a class="m-brand" href="{{ url_for('core.landing') if user else url_for('core.login') }}">Verkostungen</a>
+    {% if user %}
+    <form method="post" action="{{ url_for('core.logout') }}" class="m-user">
+      <span>{{ user.name }}</span>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="m-link" type="submit">Abmelden</button>
+    </form>
+    {% endif %}
+  </header>
+  <main class="m-page">
+    {% with messages = get_flashed_messages() %}
+      {% for message in messages %}<p class="m-flash" role="status">{{ message }}</p>{% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

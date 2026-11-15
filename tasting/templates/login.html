@@ -1,15 +1,14 @@
-{% extends "base.html" %}
-{% block title %}Eintritt · Blutkrieg der Chips{% endblock %}
+{% extends "master.html" %}
+{% block title %}Anmelden · Verkostungen{% endblock %}
 {% block content %}
-<section class="login">
-  <p class="eyebrow">Avernus, erste Schicht der Neun Höllen</p>
-  <h1>Unterschreibe den Vertrag</h1>
-  <p class="lead">Nur wer die Passphrase kennt, darf von den verfluchten Chips kosten.</p>
-  {% if error %}<p class="flash flash-error" role="alert">{{ error }}</p>{% endif %}
+<section class="m-card m-login">
+  <h1 class="m-title">Anmelden</h1>
+  <p class="m-lead">Ein Login für alle Verkostungen.</p>
+  {% if error %}<p class="m-flash m-flash-error" role="alert">{{ error }}</p>{% endif %}
   {% if options %}
-  <form method="post" class="stack">
+  <form method="post" class="m-stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label class="field">
+    <label class="m-field">
       <span>Wer bist du?</span>
       <select name="user" required>
         <option value="">Auswählen …</option>
@@ -18,16 +17,16 @@
         {% endfor %}
       </select>
     </label>
-    <label class="field">
+    <label class="m-field">
       <span>Passphrase</span>
       <input id="passphrase" type="password" name="passphrase" required autocomplete="current-password"
              autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="wort-wort-wort-123">
     </label>
-    <label class="check"><input id="show-passphrase" type="checkbox"> Passphrase anzeigen</label>
-    <button class="button button-primary" type="submit">Eintreten</button>
+    <label class="m-check"><input id="show-passphrase" type="checkbox"> Passphrase anzeigen</label>
+    <button class="m-button" type="submit">Anmelden</button>
   </form>
   {% else %}
-  <p class="flash flash-error">Noch keine Logins angelegt. Führe <code>./setup.sh</code> auf dem Server aus.</p>
+  <p class="m-flash m-flash-error">Noch keine Logins angelegt. Führe <code>./setup.sh</code> auf dem Server aus.</p>
   {% endif %}
 </section>
 {% endblock %}

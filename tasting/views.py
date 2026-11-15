@@ -6,7 +6,6 @@ import io
 import json
 import random
 import secrets
-from functools import wraps
 
 from flask import (
     Blueprint,
@@ -20,16 +19,15 @@ from flask import (
     render_template,
     request,
     send_from_directory,
-    session,
     url_for,
 )
 
-from . import archive, images, security, stats
+from . import images, stats
+from .web import admin_required, login_required, store
 from .store import validate_tasting
 from .catalog import (
     ADDICTION_TIERS,
     FLAVOR_TYPES,
-    LIVE_TASTING,
     MAX_DC,
     MAX_NOTES_LENGTH,
     MAX_SOUL_COINS,
@@ -51,33 +49,6 @@ MAX_SHOPPING_ITEMS = 80
 RESET_WORD = "ASCHE"
 
 
-def store():
-    return current_app.extensions["store"]
-
-
-def login_required(view):
-    @wraps(view)
-    def wrapped(*args, **kwargs):
-        if g.user is None:
-            if request.path.startswith("/api/"):
-                abort(401)
-            return redirect(url_for("main.login"))
-        return view(*args, **kwargs)
-
-    return wrapped
-
-
-def admin_required(view):
-    @wraps(view)
-    @login_required
-    def wrapped(*args, **kwargs):
-        if g.user["role"] != "admin":
-            abort(403)
-        return view(*args, **kwargs)
-
-    return wrapped
-
-
 def players():
     return [
         {"id": uid, "name": u["name"]}
@@ -86,98 +57,21 @@ def players():
     ]
 
 
-# --- Login ---------------------------------------------------------------
+# --- Tile on the start page ------------------------------------------------
 
 
-@bp.get("/healthz")
-def healthz():
-    return "ok"
-
-
-@bp.route("/login", methods=["GET", "POST"])
-def login():
-    if g.user:
-        return redirect(url_for("main.tastings"))
-    users = store().users()
-    limiter = current_app.extensions["limiter"]
-    error = None
-    if request.method == "POST":
-        uid = request.form.get("user", "")
-        attempt = request.form.get("passphrase", "")[:200]
-        ip = request.remote_addr or "?"
-        if limiter.blocked(ip, uid):
-            error = "Zu viele Fehlversuche. Die Höllentore bleiben fünf Minuten verschlossen."
-        else:
-            user = users.get(uid)
-            ok = security.verify_passphrase(user["hash"] if user else security.DUMMY_HASH, attempt)
-            if user and ok:
-                limiter.clear(ip, uid)
-                session.clear()
-                session.permanent = True
-                session["uid"] = uid
-                session["fp"] = user["hash"][-16:]
-                return redirect(url_for("main.tastings"))
-            limiter.record_failure(ip, uid)
-            error = "Falsche Passphrase. Der Vertrag bleibt ungültig."
-    options = sorted(
-        ({"id": uid, "name": u["name"]} for uid, u in users.items()),
-        key=lambda o: (o["id"] == "admin", o["name"].lower()),
-    )
-    return render_template("login.html", options=options, error=error), (401 if error else 200)
-
-
-@bp.post("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("main.login"))
-
-
-# --- All tastings --------------------------------------------------------
-
-
-def _live_card():
+def tile():
+    """What the start page shows on the chips tile, without giving anything away."""
     tasting = store().read()
     me = g.user["id"]
     chips = tasting["chips"]
     ranked = stats.ranked_chip_ids(tasting) if tasting["phase"] == "revealed" else []
     winner = next((stats.chip_label(c) for c in chips if ranked and c["id"] == ranked[0]), None)
-    return {
-        **LIVE_TASTING,
-        "phase": tasting["phase"],
-        "bowls": len(chips),
-        "shopping": len(tasting["shopping"]),
-        "rated": sum(1 for c in chips if me in tasting["ratings"].get(c["id"], {})),
-        "winner": winner,
-    }
-
-
-@bp.get("/verkostungen")
-@login_required
-def tastings():
-    cards = []
-    for entry in store().archives():
-        if archive.validate(entry) is None:
-            cards.append(archive.summary(entry))
-    return render_template("hub.html", live=_live_card(), archives=cards)
-
-
-def _archive_or_404(archive_id):
-    entry = store().archive(archive_id) if archive.ID_PATTERN.fullmatch(archive_id) else None
-    if entry is None or archive.validate(entry):
-        abort(404)
-    return entry
-
-
-@bp.get("/archiv/<archive_id>")
-@login_required
-def archive_page(archive_id):
-    return render_template("archive.html", entry=_archive_or_404(archive_id))
-
-
-@bp.get("/api/archiv/<archive_id>")
-@login_required
-def api_archive(archive_id):
-    return jsonify(archive.compute(_archive_or_404(archive_id)))
+    status = {"tasting": "Läuft", "ceremony": "Enthüllung", "revealed": "Enthüllt"}[tasting["phase"]]
+    facts = [f"{len(chips)} Schalen", f"{len(tasting['shopping'])} auf der Einkaufsliste"]
+    if g.user["role"] == "player" and chips and tasting["phase"] == "tasting":
+        facts.append(f"{sum(1 for c in chips if me in tasting['ratings'].get(c['id'], {}))} von {len(chips)} bewertet")
+    return {"status": status, "live": tasting["phase"] != "revealed", "facts": facts, "winner": winner}
 
 
 # --- Tasting -------------------------------------------------------------
@@ -445,36 +339,7 @@ def admin():
         any_ratings=any(counts.values()),
         adders=_display_names(),
         public_url=current_app.config["PUBLIC_URL"],
-        archives=store().archives(),
     )
-
-
-@bp.post("/admin/archiv")
-@admin_required
-def admin_archive_upload():
-    """Adds or replaces a finished tasting in the archive."""
-    upload = request.files.get("file")
-    try:
-        entry = json.loads(upload.read().decode("utf-8")) if upload and upload.filename else None
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        entry = None
-    problem = "Das ist keine lesbare JSON-Datei." if entry is None else archive.validate(entry)
-    if problem:
-        flash(f"Nichts archiviert. {problem}")
-        return redirect(url_for("main.admin"))
-    replaced = store().archive(entry["id"]) is not None
-    store().save_archive(entry)
-    flash(f"„{entry['title']}“ ist {'ersetzt' if replaced else 'im Archiv'}: {len(entry['items'])} Sorten, {len(entry['ratings'])} Wertungen.")
-    return redirect(url_for("main.admin"))
-
-
-@bp.post("/admin/archiv/<archive_id>/delete")
-@admin_required
-def admin_archive_delete(archive_id):
-    _archive_or_404(archive_id)
-    store().delete_archive(archive_id)
-    flash("Aus dem Archiv entfernt.")
-    return redirect(url_for("main.admin"))
 
 
 def _display_names():
@@ -1145,13 +1010,3 @@ def admin_export_csv():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment; filename=chips-tasting.csv"},
     )
-
-
-@bp.app_errorhandler(400)
-@bp.app_errorhandler(403)
-@bp.app_errorhandler(404)
-@bp.app_errorhandler(413)
-def handle_error(error):
-    if request.path.startswith("/api/"):
-        return jsonify({"error": error.code}), error.code
-    return render_template("error.html", code=error.code), error.code

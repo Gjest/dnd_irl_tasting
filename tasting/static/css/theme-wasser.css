@@ -1,0 +1,40 @@
+/* Water: light, clear and cool, like a glass held against the window. */
+.theme-wasser {
+  color-scheme: light;
+  --ash: #eef7fc;
+  --soot: #ffffff;
+  --char: #dcedf8;
+  --line: #b7d7ec;
+  --ember: #1585c9;
+  --brimstone: #0b4f80;
+  --blood: #c0392b;
+  --bone: #0e2a3d;
+  --dust: #3f6a86;
+  --muted: #6e8fa5;
+  --series-1: #1585c9;
+  --series-2: #2bb3a3;
+  --series-1-fill: rgba(21, 133, 201, .2);
+  --chart-text: #3f6a86;
+  --chart-label: #0e2a3d;
+  --chart-grid: rgba(14, 42, 61, .1);
+  --tooltip-bg: #ffffff;
+  --tooltip-line: #b7d7ec;
+  --tooltip-text: #0e2a3d;
+  color: var(--bone);
+  background: linear-gradient(180deg, #ffffff 0%, var(--ash) 45%, #d7ecf8 100%) fixed;
+}
+.theme-wasser h1, .theme-wasser h2, .theme-wasser h3, .theme-wasser h4, .theme-wasser .brand, .theme-wasser .tile strong {
+  font-family: Lato, system-ui, sans-serif; font-weight: 700; letter-spacing: -.01em;
+}
+.theme-wasser h1 { color: var(--brimstone); }
+.theme-wasser .site-header { background: rgba(255, 255, 255, .86); backdrop-filter: blur(10px); }
+.theme-wasser .brand { color: var(--brimstone); }
+.theme-wasser .site-nav a, .theme-wasser .site-nav .link-button { color: var(--dust); }
+.theme-wasser .button-primary, .theme-wasser .tab[aria-selected=true] { color: #fff; }
+.theme-wasser .tab { color: var(--dust); }
+.theme-wasser input, .theme-wasser select { color: var(--bone); background: #fff; }
+.theme-wasser .award { background: linear-gradient(180deg, #ffffff, #eaf5fc); }
+.theme-wasser .tile, .theme-wasser .person, .theme-wasser .card, .theme-wasser .award, .theme-wasser .note {
+  box-shadow: 0 1px 2px rgba(14, 42, 61, .05), 0 10px 24px -16px rgba(14, 42, 61, .35);
+}
+.theme-wasser .tile { border-radius: 16px; }

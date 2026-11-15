@@ -100,49 +100,55 @@ def write_json_atomic(path, data, private=False):
     os.replace(tmp, path)
 
 
-class Store:
-    def __init__(self, data_dir):
-        self.data_dir = Path(data_dir)
-        self.tasting_path = self.data_dir / "tasting.json"
-        self.users_path = self.data_dir / "users.json"
-        self.backup_dir = self.data_dir / "backups"
-        self.images_dir = self.data_dir / "images"
-        # Finished tastings, one self-describing file each (see archive.py).
-        self.archive_dir = self.data_dir / "archive"
+class JsonDocument:
+    """One JSON file, kept in memory, written atomically, with rolling backups.
+
+    Every tasting keeps its data in one of these: the chips tasting in
+    tasting.json, a finished tasting in <slug>.json. A new tasting reuses it.
+    """
+
+    def __init__(self, path, backup_dir, empty=None, upgrade=lambda data: data):
+        self.path = Path(path)
+        self.backup_dir = Path(backup_dir)
+        self._upgrade = upgrade
         self._lock = threading.RLock()
         self._last_backup = 0.0
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.backup_dir.mkdir(exist_ok=True)
-        self.images_dir.mkdir(exist_ok=True)
-        self.archive_dir.mkdir(exist_ok=True)
         # A corrupt file raises here on purpose: better to refuse to start than
         # to silently overwrite ratings with an empty tasting.
-        if self.tasting_path.exists():
-            self._tasting = _upgrade(json.loads(self.tasting_path.read_text(encoding="utf-8")))
+        if self.path.exists():
+            self._data = upgrade(json.loads(self.path.read_text(encoding="utf-8")))
+        elif empty is not None:
+            self._data = empty()
+            write_json_atomic(self.path, self._data)
         else:
-            self._tasting = _empty_tasting()
-            write_json_atomic(self.tasting_path, self._tasting)
+            self._data = None  # nothing yet, e.g. a finished tasting before its upload
+
+    def exists(self):
+        return self._data is not None
 
     def read(self):
         with self._lock:
-            return copy.deepcopy(self._tasting)
+            return copy.deepcopy(self._data)
 
     @contextmanager
     def edit(self):
         """Yield the live data and save it afterwards. An exception discards the edit."""
         with self._lock:
-            draft = copy.deepcopy(self._tasting)
+            draft = copy.deepcopy(self._data)
             yield draft
-            write_json_atomic(self.tasting_path, draft)
-            self._tasting = draft
+            write_json_atomic(self.path, draft)
+            self._data = draft
             self._backup()
 
-    def replace(self, tasting):
-        """Swaps in a whole tasting, for example an edited export."""
-        tasting = _upgrade({**_empty_tasting(), **tasting})
-        with self.edit() as data:
-            data.clear()
-            data.update(tasting)
+    def replace(self, data):
+        """Swaps in the whole document, keeping a backup of what was there."""
+        with self._lock:
+            if self._data is not None:
+                self._backup(force=True)
+            data = self._upgrade(data)
+            write_json_atomic(self.path, data)
+            self._data = data
+            self._backup(force=True)
 
     def snapshot(self):
         """Backs up right now. Call this before anything that deletes data."""
@@ -155,32 +161,47 @@ class Store:
             return
         self._last_backup = now
         stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(now))
-        shutil.copyfile(self.tasting_path, self.backup_dir / f"tasting-{stamp}.json")
-        for old in sorted(self.backup_dir.glob("tasting-*.json"))[:-BACKUPS_TO_KEEP]:
+        prefix = self.path.stem
+        shutil.copyfile(self.path, self.backup_dir / f"{prefix}-{stamp}.json")
+        for old in sorted(self.backup_dir.glob(f"{prefix}-*.json"))[:-BACKUPS_TO_KEEP]:
             old.unlink()
+
+
+class Store:
+    def __init__(self, data_dir):
+        self.data_dir = Path(data_dir)
+        self.users_path = self.data_dir / "users.json"
+        self.backup_dir = self.data_dir / "backups"
+        self.images_dir = self.data_dir / "images"
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        self.backup_dir.mkdir(exist_ok=True)
+        self.images_dir.mkdir(exist_ok=True)
+        self._tasting = JsonDocument(self.data_dir / "tasting.json", self.backup_dir, _empty_tasting, _upgrade)
+        self.tasting_path = self._tasting.path
+        self._documents = {}
+
+    # The chips tasting. These keep their old names so the chips code stays as it was.
+    def read(self):
+        return self._tasting.read()
+
+    def edit(self):
+        return self._tasting.edit()
+
+    def replace(self, tasting):
+        """Swaps in a whole tasting, for example an edited export."""
+        self._tasting.replace({**_empty_tasting(), **tasting})
+
+    def snapshot(self):
+        self._tasting.snapshot()
+
+    def document(self, slug):
+        """The JSON file of another tasting, data/<slug>.json. It may not exist yet."""
+        if slug not in self._documents:
+            self._documents[slug] = JsonDocument(self.data_dir / f"{slug}.json", self.backup_dir)
+        return self._documents[slug]
 
     # Users are re-read on every request so that passphrase changes made with
     # manage.py (a separate process) apply without restarting the server.
-    def archives(self):
-        """All archived tastings, oldest first."""
-        found = []
-        for path in sorted(self.archive_dir.glob("*.json")):
-            found.append(json.loads(path.read_text(encoding="utf-8")))
-        return sorted(found, key=lambda a: (a.get("number") or 999, a.get("date") or "", a["title"]))
-
-    def archive(self, archive_id):
-        path = self.archive_dir / f"{archive_id}.json"
-        # The id comes from a URL, so only names the archive itself would use get through.
-        if "/" in archive_id or archive_id.startswith(".") or not path.is_file():
-            return None
-        return json.loads(path.read_text(encoding="utf-8"))
-
-    def save_archive(self, archive):
-        write_json_atomic(self.archive_dir / f"{archive['id']}.json", archive)
-
-    def delete_archive(self, archive_id):
-        (self.archive_dir / f"{archive_id}.json").unlink(missing_ok=True)
-
     def users(self):
         if not self.users_path.exists():
             return {}

@@ -1,48 +1,47 @@
 # One app for every tasting
 
-The group has tasted cola (Google Forms), water (a Spring app) and chips (this app). This document describes how the app holds all of them, and how a future tasting fits in without changing the Docker setup or breaking the data that already lives on the server.
+The group has tasted cola (Google Forms), water (a Spring app) and chips (this app). This document describes how one app holds all of them, and how a new tasting gets its tile without touching the Docker setup or the data already on the server.
 
 ## Constraints
 
 - **Deployment stays as it is.** The server runs this repository with its own Docker adjustments. Every change happens in Python code and in files below `./data`, which is already a volume. No new ports, services, databases or dependencies.
-- **Existing data keeps working.** `data/tasting.json`, `data/users.json`, `data/images/` and `data/backups/` keep their meaning and location. New things go into new files or folders.
-- **Plain files.** One JSON file per tasting, readable and editable by hand, with a backup before anything is overwritten.
-- **Offline, LAN only, blind.** Nothing new loads from the internet. Nothing a player can fetch before a reveal may say what is in a bowl.
+- **Existing data keeps working.** `data/tasting.json`, `data/users.json`, `data/images/` and `data/backups/` keep their meaning and location. A new tasting gets its own file next to them.
+- **Plain files.** One JSON file per tasting, readable and editable by hand, with a backup before anything is replaced.
+- **Offline, LAN only, blind.** Nothing loads from the internet. Nothing a player can fetch before a reveal may say what is in a bowl.
 
-## What exists now
+## Layout
 
 ```
-data/
-  tasting.json          the live tasting (chips), unchanged
-  users.json            logins, shared by every tasting
-  images/  backups/     unchanged
-  archive/
-    cola.json           finished tastings, one self-describing file each
-    wasser.json
+/                 neutral start page: one tile per tasting        core.py, landing.html, master.css
+/login            neutral login, one login for every tasting      core.py, login.html
+/chips/…          the live chips tasting, Avernus look            views.py (blueprint "main"), base.html, style.css
+/cola/  /wasser/  finished tastings, each in its own look         results.py, results_page.html, theme-<slug>.css
 ```
 
-| Page | What it shows |
-|---|---|
-| `/verkostungen` | The overview everyone lands on after logging in: the live tasting with its state and a button to take part, and a card per archived tasting with its winner. |
-| `/`, `/einkauf`, `/schale/…`, `/ergebnisse` | The live chips tasting, exactly as before. |
-| `/archiv/<id>` | Results of an archived tasting: ranking, awards, x-ray, group battle, controversy, people, taste twins, flags, notes and the original questionnaire. |
-| Admin page, "Archiv" | Upload or remove archive files. |
+| Module | Job | Reused by |
+|---|---|---|
+| `registry.py` | The list of tiles: slug, kind, title, tagline, icon, theme | The start page and `results.py` |
+| `store.py` → `JsonDocument` | One JSON file in memory, atomic writes, rolling backups, `replace()` with a backup first | `tasting.json` for chips, `<slug>.json` for every other tasting |
+| `web.py` | `store()`, `login_required`, `admin_required` | Every blueprint |
+| `archive.py` | Checks a results file and computes ranking, awards, groups, people, twins, flags and notes | `results.py` |
+| `static/js/report.js` | Bars, tables, heat maps, taste twins, chart colors read from the theme | Chips results and every results page |
+| `static/css/style.css` | Components (cards, tabs, bars, tables) styled through CSS variables | Chips, and as the base below every `theme-<slug>.css` |
 
-`tasting/archive.py` validates archive files and computes every statistic from the file alone. `static/js/archive.js` renders them, and `static/js/report.js` holds the building blocks it shares with the chips results page.
+`core.py` also turns addresses from before the move (`/einkauf`, `/schale/…`, `/ergebnisse`, `/archiv/…`, `/water`) into redirects. The printed QR code still points at the root and now lands on the tiles.
 
-## The archive format (`tasting-archive/1`)
+## Results files (`tasting-archive/1`)
+
+A finished tasting is one JSON file that brings its own questions along. The results page is built from that file alone.
 
 ```json
 {
   "format": "tasting-archive/1",
-  "id": "cola",                      // lower case, digits, dashes; also the file name
-  "number": 1,                       // order on the overview
-  "title": "Cola-Verkostung",
-  "subtitle": "…", "date": "2026-08-14", "intro": "…",
+  "id": "cola",                       // overwritten with the slug on upload
+  "title": "Cola-Verkostung", "subtitle": "…", "date": "2026-08-14", "intro": "…",
   "scale": {"min": 1, "max": 5},
-  "ranking": "genuss",               // criterion the ranking uses
-  "tiebreak": "harmonie",            // optional
-  "group_label": "Zero gegen Zucker",// optional, names the group battle
+  "ranking": "genuss",                // criterion the ranking uses
+  "tiebreak": "harmonie",             // optional
+  "group_label": "Zero gegen Zucker", // optional, names the group battle
   "sections": [
     {"title": "Das Auge", "criteria": [
       {"key": "farbe", "label": "Farbintensität", "low": "Helles Kastanienbraun", "high": "Tiefes Schwarz"}
@@ -63,61 +62,45 @@ data/
 
 - **Missing answers** are `null` and are skipped in averages.
 - **Awards** average the listed criteria per item. `invert` flips a criterion, so a low pH score counts as "acidic". The app adds the most controversial item and three awards for people on its own.
-- **Groups** are free text per item. With two or more groups the results get a battle tab.
-- **Flags** are yes/no facts per rating, such as "poured it myself". The results compare the ranking score with and without each flag.
+- **Groups** are free text per item. With two or more groups the page gets a battle tab.
+- **Flags** are yes/no facts per rating, such as "poured it myself". The page compares the ranking score with and without each flag.
 
-### Where the two past tastings came from
+### Where the cola and water files came from
 
 | Tasting | Source | Notes |
 |---|---|---|
 | Cola | `cola-tasting/Cola Tasting.html` (the saved form) and `cola_tasting_analyse_v3-1.html` (all 75 answers) | The questions, their order and the scale ends come straight from the saved form, so nothing had to be guessed. "Weitere Noten" became the notes, "Eingeschenkt?" the flag. Zero and sugar come from the old analysis. |
-| Water | `WaterTasting/export/watertasting.mv.db` | Read directly from the H2 file by `tools/h2rows.py`, without Java or H2. That file is the cleaned version, in which names and sample spellings were already unified. It holds 82 ratings, and the 9 deleted test rows stay deleted. The questions come from the app's form, translated to German. The mineral battle splits at the average mineral intensity, as the old dashboard did. |
+| Water | `WaterTasting/export/watertasting.mv.db` | `tools/h2rows.py` reads the H2 file directly, without Java or H2. That file is the cleaned version, with names and sample spellings already unified. It holds 82 ratings, and the 9 deleted test rows stay deleted. The questions come from the old form, translated to German. The mineral battle splits at the average mineral intensity, as the old dashboard did. |
 
-`tools/archive_cola_water.py` rebuilds both archive files from those sources. The results stay out of git like every other export with real names.
+`tools/archive_cola_water.py` rebuilds both files. They hold real names and stay out of git; the admin uploads them on the tile's page.
 
-## Plan for future tastings
+## Adding a tasting
 
-The live tasting is still chips-specific code: the catalog, the d20 Sucht-Save, the shopping list and the stats all assume chips. A new tasting would mean changing that code. The steps below remove that assumption gradually, and each step leaves a working app.
+### A finished tasting (results only)
 
-### Step 1: Archive the chips tasting (small, next)
+1. **Results file:** turn the old data into a results file in the format above. `tools/` has two converters to start from.
+2. **Registry:** add an entry to `TASTINGS` in `registry.py`, for example:
+   ```python
+   {"slug": "kaffee", "kind": "results", "number": 4, "title": "Kaffee-Verkostung",
+    "tagline": "…", "icon": "☕", "theme": "kaffee"}
+   ```
+3. **Look:** add `static/css/theme-kaffee.css`. It sets the color variables of `style.css` (`--ash`, `--soot`, `--ember`, `--bone`, …) and the chart variables (`--series-1`, `--chart-text`, …) on `.theme-kaffee`, and can restyle headings. `theme-cola.css` and `theme-wasser.css` are short examples.
+4. **Tile color:** add `.app-tile-kaffee { --tile-a: …; --tile-b: …; }` to `master.css`.
+5. **Upload:** deploy, open the new tile as admin and upload the file. The app writes `data/kaffee.json`.
 
-Add an admin action "Als Archiv sichern" that converts `data/tasting.json` into an archive file:
+No new Python code is needed. Routes, upload, download, backups and the results page come from `results.py`.
 
-- The scale questions become criteria, and the DC becomes the ranking criterion, with a scale from 1 to 20.
-- Price guesses and contracts become flags or extra criteria. Nutrition goes into item fields that the archive page can show.
-- Buyer and setter go into the items, so the archive can show who brought what.
+### A new live tasting
 
-After that, "Alles niederbrennen" can start a fresh live tasting without losing anything. The chips-specific results page keeps working for the live tasting.
+Today the chips tasting is the only live one, and its code assumes chips: `catalog.py`, the d20 Sucht-Save, the shopping list and the chips statistics. For a new live tasting, copy it:
 
-### Step 2: Tasting definitions instead of a hard-coded catalog
+1. **Code:** copy `views.py`, `catalog.py`, `stats.py` and the chips templates and scripts. Give the blueprint a new name and register it in `create_app` under its own prefix, e.g. `/kaffee`.
+2. **Data file:** point its store at its own document, `store.document("kaffee")`, instead of `tasting.json`. `JsonDocument` already gives atomic writes, backups and `replace()`.
+3. **Registry:** add it with `"kind": "live"` and its `endpoint`. Its module provides a `tile()` function like `views.tile()`.
+4. **Content:** adapt the questions in its catalog and its look. When it is over, export it as a results file and switch its tile to `"kind": "results"`, so it keeps working without its live code.
 
-Move what `catalog.py` holds today into a definition per tasting:
+### Later
 
-```
-data/tastings/<id>/definition.json   questions, ranking question, item noun, features
-data/tastings/<id>/tasting.json      bowls, ratings, shopping list (today's format)
-data/tastings.json                   {"live": "<id>"}
-```
-
-A definition reuses the archive's `sections`, `scale`, `ranking` and `awards`, and adds:
-
-- `item_noun`: "Schale", "Glas" or "Flasche".
-- `ranking_input`: `"die"` (the d20) or `"scale"`.
-- `features`: `shopping_list`, `photos`, `price_guess`, `brand_guess`, `nutrition`.
-
-Migration: on start, if `data/tastings.json` is missing and `data/tasting.json` exists, the app treats the old file as tasting `chips` with today's catalog as its definition. Nothing on disk moves until an admin action does it, and that action makes a backup first. Old URLs (`/`, `/schale/…`) keep pointing at the live tasting.
-
-### Step 3: Generic live pages
-
-Rating, bowls, ceremony and results read the definition instead of the catalog. Chips-only statistics (Sucht-Save tiers, alignment, character sheets, nutrition) become optional modules that switch on via `features`. A new tasting is then mostly a new `definition.json`, which an admin uploads like an archive file. Every finished live tasting ends as an archive file, which closes the loop.
-
-### Step 4: Across tastings
-
-- **People:** The same people appear under different names: real names for water, nicknames for cola and chips. An admin-maintained `data/people.json` would map them, for example `{"Lennart": "Der Lenny"}`. The app does not guess these mappings.
-- **Hall of fame:** With people mapped, the overview can show statistics across tastings: the most generous palate of all time, who agrees most often over three tastings, and who wins the most guessing points.
-
-### What stays the same throughout
-
-- **Logins:** Logins and their passphrases are shared by all tastings.
-- **Security:** CSRF, the host check, rate limits and the strict CSP stay as they are. Uploads stay validated, and nothing loads from outside.
-- **Backups and import:** Backups and the admin import keep working per tasting file.
+- **Live engine:** instead of copying code, move the questions into a definition file per tasting, using the same `sections`, `scale`, `ranking` and `awards` keys as a results file, and have one set of live pages read it. Chips-only features (Sucht-Save tiers, alignment, nutrition, shopping list) would become switches in that definition. The copy above is the first step and shows which parts really differ.
+- **Chips into the archive:** an admin action that turns `tasting.json` into a results file once the chips tasting is over, so its tile stays readable after the next tasting starts.
+- **People across tastings:** water uses real names, while cola and chips use nicknames. An admin-maintained `data/people.json` mapping them would allow a hall of fame across all tastings. The app does not guess these mappings.

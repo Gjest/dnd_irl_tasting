@@ -17,6 +17,16 @@
   --dust: #c2b19a;
   --muted: #9c8b76;
   --radius: 10px;
+  /* Charts read these, so a theme can recolor them (see report.js). */
+  --series-1: #dc6a12;
+  --series-2: #3d90d0;
+  --series-1-fill: rgba(220, 106, 18, .22);
+  --chart-text: #c2b19a;
+  --chart-label: #efe4d2;
+  --chart-grid: rgba(194, 177, 154, .16);
+  --tooltip-bg: #271a16;
+  --tooltip-line: #4a332a;
+  --tooltip-text: #efe4d2;
 }
 
 * { box-sizing: border-box; }
@@ -96,37 +106,6 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--ember); out
 .login { max-width: 420px; margin: 3vh auto 0; }
 .center-note { text-align: center; margin-top: 10vh; }
 .center-note .lead { margin-left: auto; margin-right: auto; }
-
-/* Tasting overview */
-.hub-heading { margin: 2rem 0 .8rem; font-size: .8rem; letter-spacing: .14em; text-transform: uppercase; color: var(--dust); font-family: Lato, sans-serif; }
-.tasting-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .8rem; }
-.tasting-card {
-  display: flex; flex-direction: column; gap: .7rem; padding: 1.1rem;
-  color: var(--bone); text-decoration: none;
-  background: linear-gradient(180deg, #2c1b14, var(--soot)); border: 1px solid var(--line); border-radius: var(--radius);
-  transition: border-color .15s ease, transform .15s ease;
-}
-a.tasting-card:hover, a.tasting-card:focus-visible { border-color: var(--ember); transform: translateY(-2px); }
-.tasting-live { border-color: var(--ember); box-shadow: 0 0 0 1px rgba(232, 117, 26, .25), 0 12px 40px -20px rgba(232, 117, 26, .6); }
-.tasting-card-head { display: flex; align-items: flex-start; gap: .8rem; }
-.tasting-card-head > div { flex: 1; min-width: 0; }
-.tasting-card h3 { font-size: 1.15rem; color: var(--brimstone); overflow-wrap: anywhere; }
-.tasting-sub { margin: .2rem 0 0; color: var(--dust); font-size: .9rem; }
-.tasting-number {
-  flex: none; display: grid; place-items: center; width: 2.4rem; height: 2.4rem;
-  font: 900 1.1rem Cinzel, serif; color: var(--brimstone); border: 1px solid var(--line); border-radius: 50%; background: var(--char);
-}
-.status { flex: none; padding: .2rem .6rem; font-size: .75rem; font-weight: 700; border-radius: 999px; background: var(--char); color: var(--dust); }
-.status-tasting { background: var(--ember); color: #1c0d04; }
-.status-ceremony { background: var(--brimstone); color: #1c0d04; }
-.tasting-facts { display: flex; flex-wrap: wrap; gap: .3rem 1rem; list-style: none; margin: 0; padding: 0; color: var(--dust); font-size: .9rem; }
-.tasting-facts b { color: var(--bone); }
-.tasting-winner { margin: 0; font-size: .95rem; }
-.tasting-link { margin-top: auto; color: var(--brimstone); font-weight: 700; font-size: .9rem; }
-.question-list { list-style: none; margin: .4rem 0 0; padding: 0; }
-.question-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .2rem 1rem; padding: .45rem 0; border-top: 1px solid var(--line); font-size: .92rem; }
-.question-list span { color: var(--dust); }
-@media (prefers-reduced-motion: reduce) { .tasting-card { transition: none; } a.tasting-card:hover { transform: none; } }
 
 /* Bowls */
 .bowl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: .7rem; }
@@ -363,3 +342,6 @@ th, td { padding: .5rem .55rem; border-bottom: 1px solid var(--line); }
   *, *::before, *::after { animation-duration: .01ms !important; }
   .crit-hit, .crit-fail { animation: crit-flash 1.5s step-end forwards !important; }
 }
+
+.admin-box { margin-top: 2.5rem; }
+.admin-box summary { cursor: pointer; font-weight: 700; min-height: 28px; }

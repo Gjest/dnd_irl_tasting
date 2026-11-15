@@ -70,13 +70,6 @@ SCALE_SHORT = {
     "thirst": "Durst", "harmony": "Harmonie",
 }
 
-# The tasting this app runs live. Finished ones live in the archive.
-LIVE_TASTING = {
-    "title": "Blutkrieg der Chips",
-    "subtitle": "Die dritte Verkostung, blind und mit Sucht-Save",
-    "number": 3,
-}
-
 MIN_DC = 1
 MAX_DC = 20
 

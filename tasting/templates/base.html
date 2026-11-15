@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="app-base" content="{{ url_for('main.home') }}">
   <meta name="theme-color" content="#140d0b">
   <title>{% block title %}Blutkrieg der Chips{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -11,16 +12,16 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <header class="site-header">
-    <a class="brand" href="{{ url_for('main.tastings') if user else url_for('main.login') }}">Blutkrieg <span>der Chips</span></a>
+    <a class="brand" href="{{ url_for('main.home') if user else url_for('core.login') }}">Blutkrieg <span>der Chips</span></a>
     {% if user %}
     <nav class="site-nav" aria-label="Hauptmenü">
-      <a href="{{ url_for('main.tastings') }}">Verkostungen</a>
+      <a href="{{ url_for('core.landing') }}" title="Alle Verkostungen">← Alle</a>
       {% if user.role == 'player' %}<a href="{{ url_for('main.home') }}">Schalen</a>{% endif %}
       <a href="{{ url_for('main.shopping') }}">Einkauf</a>
       <a href="{{ url_for('main.unsealing') }}">Enthüllung</a>
       <a href="{{ url_for('main.results') }}">Ergebnisse</a>
       {% if user.role == 'admin' %}<a href="{{ url_for('main.admin') }}">Admin</a>{% endif %}
-      <form method="post" action="{{ url_for('main.logout') }}">
+      <form method="post" action="{{ url_for('core.logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="link-button" type="submit" title="Abmelden: {{ user.name }}">Raus</button>
       </form>

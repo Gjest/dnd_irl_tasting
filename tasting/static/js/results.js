@@ -261,7 +261,7 @@ function renderSheets() {
     const card = el("article", "person");
     if (chip.image) {
       const photo = el("img", "sheet-photo");
-      photo.src = `/bild/${encodeURIComponent(chip.image)}`;
+      photo.src = `${APP_BASE}bild/${encodeURIComponent(chip.image)}`;
       photo.alt = "";
       card.append(photo);
     }
@@ -365,7 +365,7 @@ function renderAwards() {
       card.append(el("p", "award-line", award.line));
       card.append(el("div", "award-stat", award.stat));
       const link = el("a", "", "Vertrag ansehen");
-      link.href = `/urkunde/${encodeURIComponent(award.key)}`;
+      link.href = `${APP_BASE}urkunde/${encodeURIComponent(award.key)}`;
       card.append(link);
       grid.append(card);
     }
@@ -455,7 +455,7 @@ function renderSummary() {
 
 async function start() {
   try {
-    data = await getJson("/api/results");
+    data = await getJson(`${APP_BASE}api/results`);
   } catch (err) {
     document.getElementById("load-error").hidden = false;
     return;

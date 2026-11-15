@@ -1,0 +1,37 @@
+{% extends "themed.html" %}
+{% block content %}
+<p class="eyebrow">Verkostung {{ tasting.number }} · Abgeschlossen</p>
+<h1>{{ tasting.title }}</h1>
+<p class="lead">{{ entry.subtitle if entry and entry.subtitle else tasting.tagline }}</p>
+{% if entry %}
+{% if entry.intro %}<p class="hint">{{ entry.intro }}</p>{% endif %}
+<div id="summary" class="tiles"></div>
+<nav id="tabs" class="tabs" aria-label="Auswertungen"></nav>
+<div id="panel" class="panel" data-results-url="{{ url_for('results.api', slug=tasting.slug) }}"></div>
+<p id="load-error" class="flash flash-error" hidden></p>
+{% else %}
+<p class="empty">Hier liegen noch keine Ergebnisse.{% if user.role != 'admin' %} Der Admin spielt sie hier ein.{% endif %}</p>
+{% endif %}
+
+{% if user.role == 'admin' %}
+<details class="card admin-box" {% if not entry %}open{% endif %}>
+  <summary>Daten verwalten</summary>
+  <p class="hint">Die App speichert die Ergebnisse als <code>data/{{ tasting.slug }}.json</code>. Eine neue Datei ersetzt sie, die alte landet vorher in <code>data/backups</code>.</p>
+  {% if entry %}<p><a class="button" href="{{ url_for('results.export', slug=tasting.slug) }}">JSON herunterladen</a></p>{% endif %}
+  <form method="post" action="{{ url_for('results.upload', slug=tasting.slug) }}" class="stack" enctype="multipart/form-data"
+        {% if entry %}data-confirm="Die Ergebnisse durch diese Datei ersetzen?"{% endif %}>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Ergebnisdatei (JSON)</span>
+      <input type="file" name="file" accept="application/json,.json" required></label>
+    <button class="button button-primary" type="submit">{% if entry %}Ersetzen{% else %}Einspielen{% endif %}</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if entry %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/report.js') }}"></script>
+<script src="{{ url_for('static', filename='js/archive.js') }}"></script>
+{% endif %}
+{% endblock %}

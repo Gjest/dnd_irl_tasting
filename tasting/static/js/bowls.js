@@ -31,9 +31,9 @@ function renderProgress(players) {
 async function refresh() {
   const error = document.getElementById("load-error");
   try {
-    const data = await getJson("/api/progress");
+    const data = await getJson(`${APP_BASE}api/progress`);
     if (data.phase !== "tasting") {
-      window.location.href = "/";
+      window.location.href = APP_BASE;
       return;
     }
     // Only touch the DOM on changes, so a refresh can't swallow a tap on a bowl.

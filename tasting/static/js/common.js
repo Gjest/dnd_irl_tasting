@@ -1,6 +1,8 @@
 "use strict";
 
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+// Where the current tasting lives, e.g. "/chips/". Every address below builds on it.
+const APP_BASE = (document.querySelector('meta[name="app-base"]') || { content: "/" }).content;
 
 // Builds DOM nodes. Text always goes through textContent, so player-written
 // names and notes can never turn into markup.

@@ -3,11 +3,22 @@
 // Building blocks shared by every results page: chart colors and the
 // bars, tables and headings the tabs are made of.
 
-const SERIES_CHIP = "#dc6a12";
-const SERIES_GROUP = "#3d90d0";
-const TEXT = "#c2b19a";
-const GRID = "rgba(194, 177, 154, .16)";
-const TOOLTIP = { backgroundColor: "#271a16", borderColor: "#4a332a", borderWidth: 1, titleColor: "#efe4d2", bodyColor: "#efe4d2" };
+// Colors come from the page's theme, so every tasting draws in its own palette.
+const THEME = getComputedStyle(document.body);
+const themeColor = (name, fallback) => THEME.getPropertyValue(name).trim() || fallback;
+const SERIES_CHIP = themeColor("--series-1", "#dc6a12");
+const SERIES_GROUP = themeColor("--series-2", "#3d90d0");
+const SERIES_FILL = themeColor("--series-1-fill", "rgba(220, 106, 18, .22)");
+const TEXT = themeColor("--chart-text", "#c2b19a");
+const GRID = themeColor("--chart-grid", "rgba(194, 177, 154, .16)");
+const LABEL = themeColor("--chart-label", "#efe4d2");
+const TOOLTIP = {
+  backgroundColor: themeColor("--tooltip-bg", "#271a16"),
+  borderColor: themeColor("--tooltip-line", "#4a332a"),
+  borderWidth: 1,
+  titleColor: themeColor("--tooltip-text", "#efe4d2"),
+  bodyColor: themeColor("--tooltip-text", "#efe4d2"),
+};
 
 Chart.defaults.color = TEXT;
 Chart.defaults.font.family = "Lato, sans-serif";

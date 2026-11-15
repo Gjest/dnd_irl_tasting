@@ -29,7 +29,7 @@ docker compose up -d
 docker compose down
 ```
 
-Open `http://<laptop-ip>:9001`. `localhost` does not work, because the port is only bound to the WLAN IP.
+Open `http://<laptop-ip>:9001`. `localhost` does not work, because the port is only bound to the WLAN IP. After logging in, everyone sees one tile per tasting. The chips tasting lives below `/chips/`, and addresses from before the move redirect there.
 
 Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_IP` in `.env` and run `docker compose up -d`.
 
@@ -43,9 +43,15 @@ Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_
 
 ## All tastings in one place
 
-After logging in, everyone lands on "Verkostungen". It shows the live chips tasting with a button to take part, and every finished tasting in the archive with its winner. An archived tasting has its own results page with ranking, awards, x-ray, group battle, people, taste twins, notes and the original questions.
+The start page is neutral and shows a tile per tasting. Each tasting has its own look and lives at its own address:
 
-The admin adds finished tastings under "Archiv" on the admin page. Each one is a single JSON file that brings its own questions along, and the format is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The cola and water tastings were converted with the scripts in `tools/`. The resulting files hold real names, so they are not in git.
+| Tile | Address | What it is |
+|---|---|---|
+| Blutkrieg der Chips | `/chips/` | The live tasting with shopping list, bowls, reveal and results |
+| Cola-Verkostung | `/cola/` | Results of the first tasting |
+| Wasser-Verkostung | `/wasser/` | Results of the second tasting |
+
+The cola and water results come in once as an upload. As admin, open the tile and upload the file under "Daten verwalten". The app writes it to `data/cola.json` or `data/wasser.json` and reads only that file from then on. Each upload replaces the old file, which goes to `data/backups/` first. Files uploaded with the previous version under `data/archive/` are taken over on the next start. The files were built from the old sources with the scripts in `tools/` and hold real names, so they are not in git.
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) also has the plan for future tastings.
 
@@ -89,7 +95,7 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | File | Content |
 |---|---|
 | `data/tasting.json` | Chips and all ratings, plain JSON |
-| `data/archive/` | Finished tastings, one JSON file each |
+| `data/cola.json`, `data/wasser.json` | Results of the finished tastings, written by the app after an upload |
 | `data/images/` | Photos of bags, re-encoded as JPEG |
 | `data/backups/` | A copy at most every 5 minutes while data changes, last 100 kept |
 | `data/users.json` | Names and passphrase hashes |

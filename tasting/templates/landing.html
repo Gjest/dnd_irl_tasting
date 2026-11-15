@@ -1,0 +1,20 @@
+{% extends "master.html" %}
+{% block content %}
+<h1 class="m-title">Hallo {{ user.name }}</h1>
+<p class="m-lead">Wähle eine Verkostung.</p>
+<nav class="tiles-grid" aria-label="Verkostungen">
+  {% for tile in tiles %}
+  <a class="app-tile app-tile-{{ tile.slug }}{% if tile.live %} app-tile-live{% endif %}" href="{{ tile.href }}">
+    <span class="app-tile-top">
+      <span class="app-tile-icon" aria-hidden="true">{{ tile.icon }}</span>
+      <span class="app-tile-status">{{ tile.status }}</span>
+    </span>
+    <span class="app-tile-number">Verkostung {{ tile.number }}</span>
+    <span class="app-tile-title">{{ tile.title }}</span>
+    <span class="app-tile-tagline">{{ tile.tagline }}</span>
+    <span class="app-tile-facts">{{ tile.facts|join(' · ') }}</span>
+    {% if tile.winner %}<span class="app-tile-winner">Sieger: {{ tile.winner }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+{% endblock %}

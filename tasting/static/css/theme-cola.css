@@ -1,0 +1,37 @@
+/* Cola: dark like the drink, soda-fountain red and caramel cream. */
+.theme-cola {
+  --ash: #160806;
+  --soot: #22100c;
+  --char: #331812;
+  --line: #5a2b22;
+  --ember: #e8323c;
+  --brimstone: #ffcf8a;
+  --blood: #b3141c;
+  --bone: #fff3e3;
+  --dust: #e3c3aa;
+  --muted: #b18d77;
+  --series-1: #e8323c;
+  --series-2: #f2b14a;
+  --series-1-fill: rgba(232, 50, 60, .24);
+  --chart-text: #e3c3aa;
+  --chart-label: #fff3e3;
+  --chart-grid: rgba(227, 195, 170, .16);
+  --tooltip-bg: #331812;
+  --tooltip-line: #5a2b22;
+  --tooltip-text: #fff3e3;
+  background:
+    radial-gradient(90% 50% at 50% 0%, rgba(232, 50, 60, .18), transparent 70%),
+    radial-gradient(3px 3px at 20% 30%, rgba(255, 243, 227, .12), transparent),
+    radial-gradient(2px 2px at 70% 60%, rgba(255, 243, 227, .1), transparent),
+    var(--ash);
+}
+.theme-cola h1, .theme-cola h2, .theme-cola h3, .theme-cola h4, .theme-cola .brand, .theme-cola .tile strong {
+  font-family: Lato, system-ui, sans-serif; font-weight: 700; letter-spacing: .02em;
+}
+.theme-cola h1 { font-style: italic; text-transform: uppercase; color: var(--ember); text-shadow: 0 2px 0 rgba(0, 0, 0, .35); }
+.theme-cola h2 { text-transform: uppercase; }
+.theme-cola .site-header { background: rgba(22, 8, 6, .94); border-bottom: 3px solid var(--ember); }
+.theme-cola .brand { color: var(--bone); }
+.theme-cola .button-primary, .theme-cola .tab[aria-selected=true] { color: #fff; }
+.theme-cola .award { background: linear-gradient(180deg, #3b1813, var(--soot)); border-top: 3px solid var(--ember); }
+.theme-cola .tile { border-top: 3px solid var(--ember); }

@@ -65,37 +65,37 @@ class Base(unittest.TestCase):
 
     def add_chips(self):
         admin = self.client("admin")
-        self.post(admin, "/chips", name="Geheimchip", brand="Funny", flavor_type="Paprika", price="1,99")
-        self.post(admin, "/chips", name="Zweitchip", brand="Lorenz", flavor_type="Gesalzen", own_brand="on")
-        self.post(admin, "/chips", name="Drittchip", brand="Pringles", flavor_type="BBQ", price="3")
+        self.post(admin, "/chips/chips", name="Geheimchip", brand="Funny", flavor_type="Paprika", price="1,99")
+        self.post(admin, "/chips/chips", name="Zweitchip", brand="Lorenz", flavor_type="Gesalzen", own_brand="on")
+        self.post(admin, "/chips/chips", name="Drittchip", brand="Pringles", flavor_type="BBQ", price="3")
         return admin, self.store.read()["chips"]
 
     def rate(self, client, chip_id, dc, score=3, **extra):
         fields = {f"score_{k}": str(score) for k in SCALE_KEYS}
-        return self.post(client, f"/schale/{chip_id}", dc=str(dc), **fields, **extra)
+        return self.post(client, f"/chips/schale/{chip_id}", dc=str(dc), **fields, **extra)
 
 
 class Security(Base):
     def test_pages_need_login(self):
         client = self.client()
-        for url in ("/", "/admin", "/ergebnisse", "/admin/export.json"):
+        for url in ("/chips/", "/chips/admin", "/chips/ergebnisse", "/chips/admin/export.json"):
             self.assertEqual(client.get(url).status_code, 302, url)
-        for url in ("/api/progress", "/api/results", "/api/ceremony"):
+        for url in ("/chips/api/progress", "/chips/api/results", "/chips/api/ceremony"):
             self.assertEqual(client.get(url).status_code, 401, url)
 
     def test_players_cannot_reach_admin(self):
         player = self.client("a")
-        for url in ("/admin", "/admin/daten", "/admin/export.json", "/admin/export.csv", "/admin/qr.svg"):
+        for url in ("/chips/admin", "/chips/admin/daten", "/chips/admin/export.json", "/chips/admin/export.csv", "/chips/admin/qr.svg"):
             self.assertEqual(player.get(url).status_code, 403, url)
-        self.assertEqual(self.post(player, "/admin/shuffle").status_code, 403)
-        self.assertEqual(self.post(player, "/admin/reset", confirm="ASCHE").status_code, 403)
-        self.assertEqual(self.post(player, "/admin/ceremony/start").status_code, 403)
-        self.assertEqual(self.post(player, "/api/ceremony/next").status_code, 403)
+        self.assertEqual(self.post(player, "/chips/admin/shuffle").status_code, 403)
+        self.assertEqual(self.post(player, "/chips/admin/reset", confirm="ASCHE").status_code, 403)
+        self.assertEqual(self.post(player, "/chips/admin/ceremony/start").status_code, 403)
+        self.assertEqual(self.post(player, "/chips/api/ceremony/next").status_code, 403)
         self.assertEqual(self.store.read()["chips"], [])
 
     def test_post_without_csrf_is_rejected(self):
         admin = self.client("admin")
-        response = admin.post("/chips", data={"name": "x", "flavor_type": "BBQ"})
+        response = admin.post("/chips/chips", data={"name": "x", "flavor_type": "BBQ"})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(self.store.read()["chips"], [])
         self.assertEqual(self.app.test_client().post("/login", data={"user": "a", "passphrase": PASS}).status_code, 403)
@@ -115,11 +115,11 @@ class Security(Base):
 
     def test_passphrase_reset_ends_session(self):
         player = self.client("a")
-        self.assertEqual(player.get("/").status_code, 200)
+        self.assertEqual(player.get("/chips/").status_code, 200)
         users = self.store.users()
         users["a"]["hash"] = security.hash_passphrase("new-pass-phrase-222")
         self.store.save_users(users)
-        self.assertEqual(player.get("/").status_code, 302)
+        self.assertEqual(player.get("/chips/").status_code, 302)
 
     def test_headers(self):
         response = self.client().get("/login")
@@ -160,20 +160,20 @@ class Security(Base):
         _, chips = self.add_chips()
         player = self.client("a")
         self.rate(player, chips[0]["id"], 10, notes="<script>alert(1)</script>")
-        html = player.get(f"/schale/{chips[0]['id']}").get_data(as_text=True)
+        html = player.get(f"/chips/schale/{chips[0]['id']}").get_data(as_text=True)
         self.assertNotIn("<script>alert(1)", html)
         self.assertIn("&lt;script&gt;alert(1)", html)
 
     def test_csv_export_neutralizes_formulas(self):
         admin, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 10, notes="=HYPERLINK(1)")
-        body = admin.get("/admin/export.csv").get_data(as_text=True)
+        body = admin.get("/chips/admin/export.csv").get_data(as_text=True)
         self.assertIn("'=HYPERLINK", body)
 
     def test_exports_contain_no_hashes(self):
         admin, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 10)
-        for url in ("/admin/export.json", "/admin/export.csv"):
+        for url in ("/chips/admin/export.json", "/chips/admin/export.csv"):
             self.assertNotIn("scrypt", admin.get(url).get_data(as_text=True))
 
 
@@ -182,53 +182,53 @@ class Blindness(Base):
         _, chips = self.add_chips()
         player = self.client("a")
         self.rate(self.client("b"), chips[0]["id"], 17, notes="Bobs geheime Notiz")
-        for url in ("/", "/api/progress", f"/schale/{chips[0]['id']}", "/api/ceremony", "/enthuellung", "/ergebnisse"):
+        for url in ("/chips/", "/chips/api/progress", f"/chips/schale/{chips[0]['id']}", "/chips/api/ceremony", "/chips/enthuellung", "/chips/ergebnisse"):
             body = player.get(url).get_data(as_text=True)
             for secret in ("Geheimchip", "Funny", "Bobs geheime Notiz"):
                 self.assertNotIn(secret, body, url)
-        self.assertEqual(player.get("/api/results").status_code, 403)
-        self.assertEqual(player.get("/urkunde/crown").status_code, 200)
-        self.assertNotIn("Funny", player.get("/urkunde/crown").get_data(as_text=True))
+        self.assertEqual(player.get("/chips/api/results").status_code, 403)
+        self.assertEqual(player.get("/chips/urkunde/crown").status_code, 200)
+        self.assertNotIn("Funny", player.get("/chips/urkunde/crown").get_data(as_text=True))
 
     def test_ceremony_reveals_one_at_a_time_worst_first(self):
         admin, chips = self.add_chips()
         player = self.client("a")
         for chip, score in zip(chips, (20, 5, 12)):
             self.rate(player, chip["id"], score)
-        self.post(admin, "/admin/ceremony/start")
+        self.post(admin, "/chips/admin/ceremony/start")
 
-        ceremony = player.get("/api/ceremony").get_json()
+        ceremony = player.get("/chips/api/ceremony").get_json()
         self.assertEqual(ceremony["revealed"], [])
-        self.assertEqual(player.get("/api/results").status_code, 403)
+        self.assertEqual(player.get("/chips/api/results").status_code, 403)
 
         headers = {"X-CSRF-Token": self.token(admin)}
-        first = admin.post("/api/ceremony/next", headers=headers).get_json()
+        first = admin.post("/chips/api/ceremony/next", headers=headers).get_json()
         self.assertEqual([c["label"] for c in first["revealed"]], ["Lorenz Zweitchip"])
         self.assertEqual(first["revealed"][0]["place"], 3)
-        visible = json.dumps(player.get("/api/ceremony").get_json())
+        visible = json.dumps(player.get("/chips/api/ceremony").get_json())
         self.assertNotIn("Geheimchip", visible)
         self.assertNotIn("Drittchip", visible)
 
-        admin.post("/api/ceremony/next", headers=headers)
-        last = admin.post("/api/ceremony/next", headers=headers).get_json()
+        admin.post("/chips/api/ceremony/next", headers=headers)
+        last = admin.post("/chips/api/ceremony/next", headers=headers).get_json()
         self.assertEqual(last["phase"], "revealed")
         self.assertEqual(last["revealed"][-1]["label"], "Funny Geheimchip")
         self.assertEqual(last["revealed"][-1]["place"], 1)
-        self.assertEqual(player.get("/api/results").status_code, 200)
+        self.assertEqual(player.get("/chips/api/results").status_code, 200)
 
     def test_ratings_lock_during_ceremony(self):
         admin, chips = self.add_chips()
         player = self.client("a")
         self.rate(player, chips[0]["id"], 10)
-        self.post(admin, "/admin/ceremony/start")
+        self.post(admin, "/chips/admin/ceremony/start")
         self.rate(player, chips[0]["id"], 20)
         self.assertEqual(self.store.read()["ratings"][chips[0]["id"]]["a"]["dc"], 10)
 
     def test_reopen_keeps_ratings(self):
         admin, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 10)
-        self.post(admin, "/admin/ceremony/start")
-        self.post(admin, "/admin/ceremony/reopen")
+        self.post(admin, "/chips/admin/ceremony/start")
+        self.post(admin, "/chips/admin/ceremony/reopen")
         data = self.store.read()
         self.assertEqual(data["phase"], "tasting")
         self.assertEqual(data["ratings"][chips[0]["id"]]["a"]["dc"], 10)
@@ -239,7 +239,7 @@ class Rating(Base):
         _, chips = self.add_chips()
         player = self.client("a")
         chip = chips[0]["id"]
-        self.assertEqual(self.post(player, f"/schale/{chip}", dc="10").status_code, 422)
+        self.assertEqual(self.post(player, f"/chips/schale/{chip}", dc="10").status_code, 422)
         self.assertEqual(self.rate(player, chip, 21).status_code, 422)
         self.assertEqual(self.rate(player, chip, 0).status_code, 422)
         self.assertEqual(self.rate(player, chip, 10, score=6).status_code, 422)
@@ -272,15 +272,15 @@ class Rating(Base):
     def test_bad_price_is_rejected(self):
         admin = self.client("admin")
         for bad in ("abc", "nan", "inf", "-1"):
-            self.post(admin, "/chips", name="x", flavor_type="BBQ", price=bad)
+            self.post(admin, "/chips/chips", name="x", flavor_type="BBQ", price=bad)
         self.assertEqual(self.store.read()["chips"], [])
 
     def test_bad_weight_is_rejected(self):
         admin = self.client("admin")
         for bad in ("abc", "nan", "0", "-5", "99999"):
-            self.post(admin, "/chips", name="x", flavor_type="BBQ", weight=bad)
+            self.post(admin, "/chips/chips", name="x", flavor_type="BBQ", weight=bad)
         self.assertEqual(self.store.read()["chips"], [])
-        self.post(admin, "/chips", name="x", flavor_type="BBQ", price="2", weight="175,5")
+        self.post(admin, "/chips/chips", name="x", flavor_type="BBQ", price="2", weight="175,5")
         self.assertEqual(self.store.read()["chips"][0]["weight"], 175.5)
 
     def test_removed_categories_are_gone(self):
@@ -292,13 +292,13 @@ class Rating(Base):
         admin, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 10)
         before = {c["id"]: c["bowl"] for c in self.store.read()["chips"]}
-        self.post(admin, "/admin/shuffle")
+        self.post(admin, "/chips/admin/shuffle")
         self.assertEqual({c["id"]: c["bowl"] for c in self.store.read()["chips"]}, before)
 
 
 class PlayerChips(Base):
     def add(self, client, name="Meinchip"):
-        self.assertEqual(self.post(client, "/chips", name=name, brand="Zauberknusper", flavor_type="BBQ").status_code, 302)
+        self.assertEqual(self.post(client, "/chips/chips", name=name, brand="Zauberknusper", flavor_type="BBQ").status_code, 302)
         return next(c for c in self.store.read()["chips"] if c["name"] == name)
 
     def test_any_player_can_add_and_rate_own_chip(self):
@@ -311,25 +311,25 @@ class PlayerChips(Base):
     def test_only_the_adder_sees_what_is_inside(self):
         alice, bob = self.client("a"), self.client("b")
         chip = self.add(alice)
-        self.assertIn("Meinchip", alice.get("/").get_data(as_text=True))
-        self.assertIn("Meinchip", alice.get(f"/schale/{chip['id']}").get_data(as_text=True))
-        for url in ("/", f"/?edit={chip['id']}", "/api/progress", f"/schale/{chip['id']}"):
+        self.assertIn("Meinchip", alice.get("/chips/").get_data(as_text=True))
+        self.assertIn("Meinchip", alice.get(f"/chips/schale/{chip['id']}").get_data(as_text=True))
+        for url in ("/chips/", f"/chips/?edit={chip['id']}", "/chips/api/progress", f"/chips/schale/{chip['id']}"):
             body = bob.get(url).get_data(as_text=True)
             self.assertNotIn("Meinchip", body, url)
             self.assertNotIn("Zauberknusper", body, url)
-        self.assertNotIn('"added_by"', bob.get("/api/progress").get_data(as_text=True))
+        self.assertNotIn('"added_by"', bob.get("/chips/api/progress").get_data(as_text=True))
 
     def test_others_cannot_change_a_chip(self):
         alice, bob = self.client("a"), self.client("b")
         chip = self.add(alice)
-        self.assertEqual(self.post(bob, f"/chips/{chip['id']}", name="Gehackt", flavor_type="BBQ").status_code, 403)
-        self.assertEqual(self.post(bob, f"/chips/{chip['id']}/delete").status_code, 403)
+        self.assertEqual(self.post(bob, f"/chips/chips/{chip['id']}", name="Gehackt", flavor_type="BBQ").status_code, 403)
+        self.assertEqual(self.post(bob, f"/chips/chips/{chip['id']}/delete").status_code, 403)
         self.assertEqual(self.store.read()["chips"][0]["name"], "Meinchip")
 
     def test_adder_can_edit_but_keeps_ownership(self):
         alice = self.client("a")
         chip = self.add(alice)
-        self.post(alice, f"/chips/{chip['id']}", name="Neu", flavor_type="Käse", added_by="b")
+        self.post(alice, f"/chips/chips/{chip['id']}", name="Neu", flavor_type="Käse", added_by="b")
         updated = self.store.read()["chips"][0]
         self.assertEqual((updated["name"], updated["added_by"]), ("Neu", "a"))
 
@@ -338,14 +338,14 @@ class PlayerChips(Base):
         chip = self.add(alice)
         self.rate(alice, chip["id"], 10)
         self.rate(self.client("b"), chip["id"], 10)
-        self.post(alice, f"/chips/{chip['id']}/delete")
+        self.post(alice, f"/chips/chips/{chip['id']}/delete")
         self.assertEqual(len(self.store.read()["chips"]), 1)
 
     def test_adder_can_delete_with_only_own_rating(self):
         alice = self.client("a")
         chip = self.add(alice)
         self.rate(alice, chip["id"], 10)
-        self.post(alice, f"/chips/{chip['id']}/delete")
+        self.post(alice, f"/chips/chips/{chip['id']}/delete")
         data = self.store.read()
         self.assertEqual(data["chips"], [])
         self.assertEqual(data["ratings"], {})
@@ -353,9 +353,9 @@ class PlayerChips(Base):
     def test_players_cannot_add_after_lock(self):
         admin, _ = self.add_chips()
         self.rate(self.client("a"), self.store.read()["chips"][0]["id"], 10)
-        self.post(admin, "/admin/ceremony/start")
+        self.post(admin, "/chips/admin/ceremony/start")
         before = len(self.store.read()["chips"])
-        self.post(self.client("b"), "/chips", name="Spät", flavor_type="BBQ")
+        self.post(self.client("b"), "/chips/chips", name="Spät", flavor_type="BBQ")
         self.assertEqual(len(self.store.read()["chips"]), before)
 
     def test_own_chip_guesses_are_dropped_and_score_nothing(self):
@@ -374,16 +374,16 @@ class PlayerChips(Base):
 
     def test_weight_stays_private_before_reveal(self):
         alice, bob = self.client("a"), self.client("b")
-        self.post(alice, "/chips", name="Schwer", flavor_type="BBQ", price="2,50", weight="4242")
+        self.post(alice, "/chips/chips", name="Schwer", flavor_type="BBQ", price="2,50", weight="4242")
         chip = self.store.read()["chips"][0]
-        for url in ("/", "/api/progress", f"/schale/{chip['id']}"):
+        for url in ("/chips/", "/chips/api/progress", f"/chips/schale/{chip['id']}"):
             self.assertNotIn("4242", bob.get(url).get_data(as_text=True), url)
 
 
 class Shopping(Base):
     def add(self, client, name="Ungarisch", brand="Funny-Frisch", **extra):
         fields = {"name": name, "brand": brand, "flavor_type": "Paprika", "buyer": "me", **extra}
-        return self.post(client, "/einkauf", **fields)
+        return self.post(client, "/chips/einkauf", **fields)
 
     def items(self):
         return self.store.read()["shopping"]
@@ -391,7 +391,7 @@ class Shopping(Base):
     def test_everyone_sees_the_list(self):
         self.add(self.client("a"))
         for uid in ("b", "admin"):
-            body = self.client(uid).get("/einkauf").get_data(as_text=True)
+            body = self.client(uid).get("/chips/einkauf").get_data(as_text=True)
             self.assertIn("Ungarisch", body)
             self.assertIn("kauft Alice", body)
 
@@ -405,65 +405,65 @@ class Shopping(Base):
         bob = self.client("b")
         self.add(bob, name="Ungarische Art", brand="Funny")
         self.assertEqual(len(self.items()), 2)
-        self.assertIn("klingt wie", bob.get("/einkauf").get_data(as_text=True))
+        self.assertIn("klingt wie", bob.get("/chips/einkauf").get_data(as_text=True))
 
     def test_wish_can_be_claimed_once(self):
         self.add(self.client("a"), buyer="open")
-        self.post(self.client("b"), f"/einkauf/{self.items()[0]['id']}/claim")
-        self.post(self.client("c"), f"/einkauf/{self.items()[0]['id']}/claim")
+        self.post(self.client("b"), f"/chips/einkauf/{self.items()[0]['id']}/claim")
+        self.post(self.client("c"), f"/chips/einkauf/{self.items()[0]['id']}/claim")
         self.assertEqual(self.items()[0]["buyer"], "b")
 
     def test_only_the_buyer_marks_bought_or_releases(self):
         self.add(self.client("a"))
         item = self.items()[0]["id"]
         bob = self.client("b")
-        self.assertEqual(self.post(bob, f"/einkauf/{item}/bought").status_code, 403)
-        self.assertEqual(self.post(bob, f"/einkauf/{item}/release").status_code, 403)
-        self.post(self.client("a"), f"/einkauf/{item}/bought")
+        self.assertEqual(self.post(bob, f"/chips/einkauf/{item}/bought").status_code, 403)
+        self.assertEqual(self.post(bob, f"/chips/einkauf/{item}/release").status_code, 403)
+        self.post(self.client("a"), f"/chips/einkauf/{item}/bought")
         self.assertTrue(self.items()[0]["bought"])
 
     def test_wisher_cannot_strike_what_someone_else_buys(self):
         alice = self.client("a")
         self.add(alice, buyer="open")
         item = self.items()[0]["id"]
-        self.post(self.client("b"), f"/einkauf/{item}/claim")
-        self.post(alice, f"/einkauf/{item}/delete")
+        self.post(self.client("b"), f"/chips/einkauf/{item}/claim")
+        self.post(alice, f"/chips/einkauf/{item}/delete")
         self.assertEqual(len(self.items()), 1)
-        self.assertEqual(self.post(self.client("c"), f"/einkauf/{item}/delete").status_code, 403)
-        self.post(self.client("admin"), f"/einkauf/{item}/delete")
+        self.assertEqual(self.post(self.client("c"), f"/chips/einkauf/{item}/delete").status_code, 403)
+        self.post(self.client("admin"), f"/chips/einkauf/{item}/delete")
         self.assertEqual(self.items(), [])
 
     def test_anyone_sets_up_any_item_and_the_buyer_stays_blind(self):
         alice, bob = self.client("a"), self.client("b")
         self.add(alice)
         item = self.items()[0]["id"]
-        form = bob.get(f"/?from={item}").get_data(as_text=True)
+        form = bob.get(f"/chips/?from={item}").get_data(as_text=True)
         self.assertIn('value="Ungarisch"', form)
-        self.post(bob, "/chips", name="Ungarisch", brand="Funny-Frisch", flavor_type="Paprika",
+        self.post(bob, "/chips/chips", name="Ungarisch", brand="Funny-Frisch", flavor_type="Paprika",
                   price="2,49", weight="175", item_id=item)
         chip = self.store.read()["chips"][0]
         self.assertEqual((chip["added_by"], chip["bought_by"], chip["item_id"]), ("b", "a", item))
         # Alice bought the bag but must not learn which bowl it became.
-        self.assertNotIn("Schale 1", alice.get("/einkauf").get_data(as_text=True))
-        self.assertNotIn("Deine Chips", alice.get("/").get_data(as_text=True))
-        self.assertIn("Deine Chips", bob.get("/").get_data(as_text=True))
-        self.assertFalse(alice.get("/api/progress").get_json()["bowls"][0]["brought"])
-        self.assertTrue(bob.get("/api/progress").get_json()["bowls"][0]["brought"])
-        self.assertNotIn("Deine eigenen Chips", alice.get(f"/schale/{chip['id']}").get_data(as_text=True))
-        self.assertIn("Deine eigenen Chips", bob.get(f"/schale/{chip['id']}").get_data(as_text=True))
-        self.assertIn("Schale 1", self.client("admin").get("/einkauf").get_data(as_text=True))
+        self.assertNotIn("Schale 1", alice.get("/chips/einkauf").get_data(as_text=True))
+        self.assertNotIn("Deine Chips", alice.get("/chips/").get_data(as_text=True))
+        self.assertIn("Deine Chips", bob.get("/chips/").get_data(as_text=True))
+        self.assertFalse(alice.get("/chips/api/progress").get_json()["bowls"][0]["brought"])
+        self.assertTrue(bob.get("/chips/api/progress").get_json()["bowls"][0]["brought"])
+        self.assertNotIn("Deine eigenen Chips", alice.get(f"/chips/schale/{chip['id']}").get_data(as_text=True))
+        self.assertIn("Deine eigenen Chips", bob.get(f"/chips/schale/{chip['id']}").get_data(as_text=True))
+        self.assertIn("Schale 1", self.client("admin").get("/chips/einkauf").get_data(as_text=True))
 
     def test_one_bag_can_fill_several_bowls(self):
         self.add(self.client("a"))
         item = self.items()[0]["id"]
-        self.post(self.client("b"), f"/einkauf/{item}/setup")
-        self.post(self.client("c"), f"/einkauf/{item}/setup")
+        self.post(self.client("b"), f"/chips/einkauf/{item}/setup")
+        self.post(self.client("c"), f"/chips/einkauf/{item}/setup")
         chips = self.store.read()["chips"]
         self.assertEqual([(c["bowl"], c["added_by"], c["item_id"]) for c in chips], [(1, "b", item), (2, "c", item)])
 
     def test_buyer_may_guess_on_their_bag_but_the_setter_may_not(self):
         self.add(self.client("a"))
-        self.post(self.client("b"), f"/einkauf/{self.items()[0]['id']}/setup")
+        self.post(self.client("b"), f"/chips/einkauf/{self.items()[0]['id']}/setup")
         data = self.store.read()
         chip = data["chips"][0]
         guess = {"guess_flavor": "Paprika", "guess_brand": "Funny-Frisch", "scores": {}, "dc": 10}
@@ -473,7 +473,7 @@ class Shopping(Base):
     def test_list_locks_with_the_ratings(self):
         admin, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 10)
-        self.post(admin, "/admin/ceremony/start")
+        self.post(admin, "/chips/admin/ceremony/start")
         self.add(self.client("b"))
         self.assertEqual(self.items(), [])
 
@@ -487,9 +487,9 @@ class Shopping(Base):
         self.app = create_app(self.tmp.name)
         self.store = self.app.extensions["store"]
         alice = self.client("a")
-        self.assertEqual(alice.get("/einkauf").status_code, 200)
-        self.assertEqual(alice.get("/einkauf?edit=i1").status_code, 200)
-        self.assertEqual(alice.get("/?from=i1").status_code, 200)
+        self.assertEqual(alice.get("/chips/einkauf").status_code, 200)
+        self.assertEqual(alice.get("/chips/einkauf?edit=i1").status_code, 200)
+        self.assertEqual(alice.get("/chips/?from=i1").status_code, 200)
 
     def test_old_files_get_a_list(self):
         path = os.path.join(self.tmp.name, "tasting.json")
@@ -501,60 +501,60 @@ class Shopping(Base):
 class ListDetails(Base):
     def test_name_is_optional_when_brand_and_flavor_say_enough(self):
         alice = self.client("a")
-        self.post(alice, "/chips", brand="Pringles", flavor_type="Paprika")
+        self.post(alice, "/chips/chips", brand="Pringles", flavor_type="Paprika")
         chip = self.store.read()["chips"][0]
         self.assertEqual(stats.chip_label(chip), "Pringles Paprika")
-        self.post(alice, "/chips", flavor_type="BBQ")
+        self.post(alice, "/chips/chips", flavor_type="BBQ")
         self.assertEqual(len(self.store.read()["chips"]), 1)
 
     def test_complete_item_becomes_a_bowl_in_one_step(self):
         alice = self.client("a")
-        self.post(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", price="2,99", weight="165", buyer="me")
+        self.post(alice, "/chips/einkauf", brand="Pringles", flavor_type="Paprika", price="2,99", weight="165", buyer="me")
         item = self.store.read()["shopping"][0]
-        self.post(alice, f"/einkauf/{item['id']}/setup")
+        self.post(alice, f"/chips/einkauf/{item['id']}/setup")
         chip = self.store.read()["chips"][0]
         self.assertEqual((chip["brand"], chip["flavor_type"], chip["price"], chip["weight"]), ("Pringles", "Paprika", 2.99, 165))
         self.assertEqual(chip["item_id"], item["id"])
 
     def test_nutrition_travels_from_the_list_into_the_bowl(self):
         alice = self.client("a")
-        self.post(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", buyer="me")
+        self.post(alice, "/chips/einkauf", brand="Pringles", flavor_type="Paprika", buyer="me")
         with self.store.edit() as data:
             data["shopping"][0].update(nutrition={"kcal": 528, "salt": 1.0}, ingredients="Kartoffeln, Öl, Salz")
-        self.assertIn("528", alice.get("/einkauf").get_data(as_text=True))
-        self.post(self.client("b"), f"/einkauf/{self.store.read()['shopping'][0]['id']}/setup")
+        self.assertIn("528", alice.get("/chips/einkauf").get_data(as_text=True))
+        self.post(self.client("b"), f"/chips/einkauf/{self.store.read()['shopping'][0]['id']}/setup")
         chip = self.store.read()["chips"][0]
         self.assertEqual((chip["nutrition"]["kcal"], chip["ingredients"]), (528, "Kartoffeln, Öl, Salz"))
 
     def test_incomplete_item_opens_the_filled_form(self):
         alice = self.client("a")
-        self.post(alice, "/einkauf", name="Irgendwas mit Trüffel", buyer="me")
+        self.post(alice, "/chips/einkauf", name="Irgendwas mit Trüffel", buyer="me")
         item = self.store.read()["shopping"][0]
-        response = self.post(alice, f"/einkauf/{item['id']}/setup")
+        response = self.post(alice, f"/chips/einkauf/{item['id']}/setup")
         self.assertIn(f"from={item['id']}", response.headers["Location"])
         self.assertEqual(self.store.read()["chips"], [])
 
     def test_price_on_the_list_stays_with_the_buyer(self):
         alice = self.client("a")
-        self.post(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", price="4,27", buyer="me")
-        self.assertIn("4,27", alice.get("/einkauf").get_data(as_text=True))
-        self.assertNotIn("4,27", self.client("b").get("/einkauf").get_data(as_text=True))
+        self.post(alice, "/chips/einkauf", brand="Pringles", flavor_type="Paprika", price="4,27", buyer="me")
+        self.assertIn("4,27", alice.get("/chips/einkauf").get_data(as_text=True))
+        self.assertNotIn("4,27", self.client("b").get("/chips/einkauf").get_data(as_text=True))
 
     def test_different_flavors_of_one_brand_are_no_duplicates(self):
-        self.post(self.client("a"), "/einkauf", brand="Pringles", flavor_type="Paprika")
-        self.post(self.client("b"), "/einkauf", brand="Pringles", flavor_type="Sour Cream & Zwiebel")
-        self.post(self.client("c"), "/einkauf", brand="pringles", flavor_type="Paprika")
+        self.post(self.client("a"), "/chips/einkauf", brand="Pringles", flavor_type="Paprika")
+        self.post(self.client("b"), "/chips/einkauf", brand="Pringles", flavor_type="Sour Cream & Zwiebel")
+        self.post(self.client("c"), "/chips/einkauf", brand="pringles", flavor_type="Paprika")
         self.assertEqual(len(self.store.read()["shopping"]), 2)
 
     def test_item_stays_editable_after_it_became_a_bowl(self):
         alice = self.client("a")
-        self.post(alice, "/einkauf", brand="Pringles", buyer="me")
+        self.post(alice, "/chips/einkauf", brand="Pringles", buyer="me")
         item = self.store.read()["shopping"][0]["id"]
-        self.post(alice, f"/einkauf/{item}", brand="Pringles", flavor_type="Paprika", weight="165")
+        self.post(alice, f"/chips/einkauf/{item}", brand="Pringles", flavor_type="Paprika", weight="165")
         self.assertEqual(self.store.read()["shopping"][0]["flavor_type"], "Paprika")
-        self.assertEqual(self.post(self.client("b"), f"/einkauf/{item}", brand="Gehackt").status_code, 403)
-        self.post(alice, f"/einkauf/{item}/setup")
-        self.post(alice, f"/einkauf/{item}", brand="Pringles", flavor_type="Käse")
+        self.assertEqual(self.post(self.client("b"), f"/chips/einkauf/{item}", brand="Gehackt").status_code, 403)
+        self.post(alice, f"/chips/einkauf/{item}/setup")
+        self.post(alice, f"/chips/einkauf/{item}", brand="Pringles", flavor_type="Käse")
         data = self.store.read()
         self.assertEqual((data["shopping"][0]["flavor_type"], data["chips"][0]["flavor_type"]), ("Käse", "Paprika"))
 
@@ -562,19 +562,19 @@ class ListDetails(Base):
 class Import(Base):
     def send(self, client, payload, confirm="on"):
         body = payload if isinstance(payload, bytes) else json.dumps(payload).encode()
-        return client.post("/admin/import", data={"csrf_token": self.token(client), "confirm": confirm,
+        return client.post("/chips/admin/import", data={"csrf_token": self.token(client), "confirm": confirm,
                                                   "file": (io.BytesIO(body), "export.json")},
                            content_type="multipart/form-data")
 
     def exported(self):
         admin, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 12)
-        return admin, json.loads(admin.get("/admin/export.json").get_data(as_text=True))
+        return admin, json.loads(admin.get("/chips/admin/export.json").get_data(as_text=True))
 
     def test_export_can_be_edited_and_imported_again(self):
         admin, data = self.exported()
         data["chips"][0]["name"] = "Umbenannt"
-        self.post(admin, "/admin/reset", confirm="ASCHE")
+        self.post(admin, "/chips/admin/reset", confirm="ASCHE")
         self.assertEqual(self.send(admin, data).status_code, 302)
         now = self.store.read()
         self.assertEqual(now["chips"][0]["name"], "Umbenannt")
@@ -604,7 +604,7 @@ class Import(Base):
         data = self.store.read()
         self.assertEqual((data["chips"][0]["item_id"], data["chips"][0]["bought_by"]), ("i1", "a"))
         self.assertNotIn("chip_id", data["shopping"][0])
-        self.assertEqual(self.client("a").get("/einkauf").status_code, 200)
+        self.assertEqual(self.client("a").get("/chips/einkauf").status_code, 200)
 
 
 class Photos(Base):
@@ -615,11 +615,11 @@ class Photos(Base):
         alice = self.client("a")
         exif = Image.Exif()
         exif[0x010F] = "Spionagekamera"  # Make
-        response = self.upload(alice, "/chips", data=photo_bytes("JPEG", exif=exif), flavor_type="BBQ", brand="Chio")
+        response = self.upload(alice, "/chips/chips", data=photo_bytes("JPEG", exif=exif), flavor_type="BBQ", brand="Chio")
         self.assertEqual(response.status_code, 302)
         chip = self.store.read()["chips"][0]
         self.assertEqual(self.images(), [chip["image"]])
-        served = alice.get(f"/bild/{chip['image']}")
+        served = alice.get(f"/chips/bild/{chip['image']}")
         self.assertEqual(served.mimetype, "image/jpeg")
         self.assertNotIn(b"Spionagekamera", served.data)
         self.assertFalse(Image.open(io.BytesIO(served.data)).getexif())
@@ -627,14 +627,14 @@ class Photos(Base):
     def test_non_images_are_refused(self):
         alice = self.client("a")
         for data in (b"<svg onload=alert(1)>", b"GIF89a" + b"x" * 50, b""):
-            self.upload(alice, "/chips", data=data, flavor_type="BBQ", brand="Chio")
+            self.upload(alice, "/chips/chips", data=data, flavor_type="BBQ", brand="Chio")
         gif = io.BytesIO()
         Image.new("RGB", (5, 5)).save(gif, "GIF")
-        self.upload(alice, "/chips", data=gif.getvalue(), flavor_type="BBQ", brand="Chio")
+        self.upload(alice, "/chips/chips", data=gif.getvalue(), flavor_type="BBQ", brand="Chio")
         self.assertEqual(self.store.read()["chips"], [])
         self.assertEqual(self.images(), [])
         # A form sent without choosing a file is fine and just has no photo.
-        alice.post("/chips", data={"csrf_token": self.token(alice), "flavor_type": "BBQ", "brand": "Chio",
+        alice.post("/chips/chips", data={"csrf_token": self.token(alice), "flavor_type": "BBQ", "brand": "Chio",
                                    "image": (io.BytesIO(b""), "")}, content_type="multipart/form-data")
         self.assertEqual([c.get("image") for c in self.store.read()["chips"]], [None])
 
@@ -642,51 +642,51 @@ class Photos(Base):
         alice = self.client("a")
         big = photo_bytes("PNG", size=(400, 300))
         self.assertGreater(len(big) + 70000, 64 * 1024)
-        response = self.upload(alice, "/chips", data=big + b"\0" * 70000, flavor_type="BBQ", brand="Chio")
+        response = self.upload(alice, "/chips/chips", data=big + b"\0" * 70000, flavor_type="BBQ", brand="Chio")
         self.assertEqual(response.status_code, 302)
         too_big = b"\0" * (13 * 1024 * 1024)
-        self.assertEqual(self.upload(alice, "/chips", data=too_big, flavor_type="BBQ").status_code, 413)
+        self.assertEqual(self.upload(alice, "/chips/chips", data=too_big, flavor_type="BBQ").status_code, 413)
 
     def test_bowl_photo_is_blind_until_the_reveal(self):
         admin = self.client("admin")
         alice, bob = self.client("a"), self.client("b")
-        self.upload(alice, "/chips", flavor_type="BBQ", brand="Chio")
+        self.upload(alice, "/chips/chips", flavor_type="BBQ", brand="Chio")
         name = self.store.read()["chips"][0]["image"]
-        self.assertEqual(bob.get(f"/bild/{name}").status_code, 404)
-        self.assertEqual(admin.get(f"/bild/{name}").status_code, 200)
+        self.assertEqual(bob.get(f"/chips/bild/{name}").status_code, 404)
+        self.assertEqual(admin.get(f"/chips/bild/{name}").status_code, 200)
         self.rate(bob, self.store.read()["chips"][0]["id"], 10)
-        self.post(admin, "/admin/ceremony/start")
-        self.assertEqual(bob.get(f"/bild/{name}").status_code, 404)
-        admin.post("/api/ceremony/next", headers={"X-CSRF-Token": self.token(admin)})
-        self.assertEqual(bob.get(f"/bild/{name}").status_code, 200)
+        self.post(admin, "/chips/admin/ceremony/start")
+        self.assertEqual(bob.get(f"/chips/bild/{name}").status_code, 404)
+        admin.post("/chips/api/ceremony/next", headers={"X-CSRF-Token": self.token(admin)})
+        self.assertEqual(bob.get(f"/chips/bild/{name}").status_code, 200)
 
     def test_list_photo_is_public_and_moves_to_the_bowl(self):
         alice = self.client("a")
-        self.upload(alice, "/einkauf", brand="Pringles", flavor_type="Paprika", buyer="me")
+        self.upload(alice, "/chips/einkauf", brand="Pringles", flavor_type="Paprika", buyer="me")
         item = self.store.read()["shopping"][0]
-        self.assertEqual(self.client("b").get(f"/bild/{item['image']}").status_code, 200)
-        self.post(self.client("c"), f"/einkauf/{item['id']}/setup")
+        self.assertEqual(self.client("b").get(f"/chips/bild/{item['image']}").status_code, 200)
+        self.post(self.client("c"), f"/chips/einkauf/{item['id']}/setup")
         self.assertEqual(self.store.read()["chips"][0]["image"], item["image"])
         # Striking the item keeps the photo, the bowl still uses it.
-        self.post(alice, f"/einkauf/{item['id']}/delete")
+        self.post(alice, f"/chips/einkauf/{item['id']}/delete")
         self.assertEqual(self.images(), [item["image"]])
-        self.assertEqual(self.client("b").get(f"/bild/{item['image']}").status_code, 404)
+        self.assertEqual(self.client("b").get(f"/chips/bild/{item['image']}").status_code, 404)
 
     def test_replaced_and_deleted_photos_are_removed(self):
         alice = self.client("a")
-        self.upload(alice, "/chips", flavor_type="BBQ", brand="Chio")
+        self.upload(alice, "/chips/chips", flavor_type="BBQ", brand="Chio")
         chip = self.store.read()["chips"][0]
-        self.upload(alice, f"/chips/{chip['id']}", flavor_type="BBQ", brand="Chio")
+        self.upload(alice, f"/chips/chips/{chip['id']}", flavor_type="BBQ", brand="Chio")
         new = self.store.read()["chips"][0]["image"]
         self.assertEqual(self.images(), [new])
-        self.post(alice, f"/chips/{chip['id']}", flavor_type="BBQ", brand="Chio", remove_image="on")
+        self.post(alice, f"/chips/chips/{chip['id']}", flavor_type="BBQ", brand="Chio", remove_image="on")
         self.assertEqual(self.images(), [])
 
     def test_camera_and_file_buttons_both_work(self):
         alice = self.client("a")
         for files in ([(io.BytesIO(b""), ""), (io.BytesIO(photo_bytes()), "kamera.jpg")],
                       [(io.BytesIO(photo_bytes()), "datei.png"), (io.BytesIO(b""), "")]):
-            alice.post("/chips", data={"csrf_token": self.token(alice), "flavor_type": "BBQ", "brand": "Chio",
+            alice.post("/chips/chips", data={"csrf_token": self.token(alice), "flavor_type": "BBQ", "brand": "Chio",
                                        "image": files}, content_type="multipart/form-data")
         self.assertTrue(all(c["image"] for c in self.store.read()["chips"]))
         self.assertEqual(len(self.images()), 2)
@@ -694,13 +694,13 @@ class Photos(Base):
     def test_bad_names_are_not_served(self):
         alice = self.client("a")
         for name in ("../users.json", "secret.key", "abc.jpg"):
-            self.assertEqual(alice.get(f"/bild/{name}").status_code, 404)
+            self.assertEqual(alice.get(f"/chips/bild/{name}").status_code, 404)
 
     def test_failed_upload_leaves_no_file(self):
         admin, chips = self.add_chips()
         self.rate(self.client("a"), chips[0]["id"], 10)
-        self.post(admin, "/admin/ceremony/start")
-        self.upload(self.client("b"), "/chips", flavor_type="BBQ", brand="Chio")
+        self.post(admin, "/chips/admin/ceremony/start")
+        self.upload(self.client("b"), "/chips/chips", flavor_type="BBQ", brand="Chio")
         self.assertEqual(self.images(), [])
 
 
@@ -724,55 +724,109 @@ def small_archive(**changes):
     return {**base, **changes}
 
 
-class Archive(Base):
-    def upload(self, client, entry):
+class Tastings(Base):
+    def upload(self, client, entry, slug="cola"):
         body = json.dumps(entry).encode() if isinstance(entry, dict) else entry
-        return client.post("/admin/archiv", data={"csrf_token": self.token(client), "file": (io.BytesIO(body), "a.json")},
+        return client.post(f"/{slug}/einspielen", data={"csrf_token": self.token(client), "file": (io.BytesIO(body), "a.json")},
                            content_type="multipart/form-data")
 
-    def test_admin_archives_and_everyone_reads(self):
-        admin = self.client("admin")
-        self.assertEqual(self.upload(admin, small_archive()).status_code, 302)
-        player = self.client("a")
-        hub = player.get("/verkostungen").get_data(as_text=True)
-        self.assertIn("Cola-Verkostung", hub)
-        self.assertIn("Cherry", hub)
-        self.assertEqual(player.get("/archiv/cola").status_code, 200)
-        result = player.get("/api/archiv/cola").get_json()
-        self.assertEqual([r["name"] for r in result["ranking"]], ["Cherry", "Zero", "Fanta"])
+    def test_landing_has_a_tile_for_every_tasting(self):
+        body = self.client("a").get("/").get_data(as_text=True)
+        for title, href in (("Blutkrieg der Chips", 'href="/chips/"'), ("Cola-Verkostung", 'href="/cola/"'),
+                            ("Wasser-Verkostung", 'href="/wasser/"')):
+            self.assertIn(title, body)
+            self.assertIn(href, body)
+        self.assertIn("Noch keine Daten", body)
 
-    def test_bad_archives_are_refused(self):
+    def test_landing_keeps_the_live_tasting_blind(self):
+        self.add_chips()
+        body = self.client("a").get("/").get_data(as_text=True)
+        self.assertIn("3 Schalen", body)
+        for secret in ("Geheimchip", "Funny"):
+            self.assertNotIn(secret, body)
+
+    def test_login_lands_on_the_tiles(self):
+        response = self.post(self.client(), "/login", user="a", passphrase=PASS)
+        self.assertEqual(response.headers["Location"], "/")
+
+    def test_upload_writes_its_own_file_and_everyone_reads(self):
         admin = self.client("admin")
-        for entry in (b"{kaputt", {"format": "x"}, small_archive(id="../users"), small_archive(ranking="nichts"),
+        self.assertEqual(self.upload(admin, small_archive(id="egal")).status_code, 302)
+        with open(os.path.join(self.tmp.name, "cola.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["id"], "cola")
+        player = self.client("a")
+        self.assertIn("Sieger: Cherry", player.get("/").get_data(as_text=True))
+        page = player.get("/cola/").get_data(as_text=True)
+        self.assertIn("theme-cola.css", page)
+        self.assertNotIn("Daten verwalten", page)
+        result = player.get("/cola/api/ergebnisse").get_json()
+        self.assertEqual([r["name"] for r in result["ranking"]], ["Cherry", "Zero", "Fanta"])
+        self.assertIn("Daten verwalten", admin.get("/cola/").get_data(as_text=True))
+        self.assertIn('"title": "Cola-Verkostung"', admin.get("/cola/export.json").get_data(as_text=True))
+
+    def test_replacing_keeps_a_backup(self):
+        admin = self.client("admin")
+        self.upload(admin, small_archive())
+        self.upload(admin, small_archive(title="Neu"))
+        backups = os.listdir(os.path.join(self.tmp.name, "backups"))
+        self.assertTrue(any(name.startswith("cola-") for name in backups))
+        self.assertEqual(self.store.document("cola").read()["title"], "Neu")
+
+    def test_bad_uploads_are_refused(self):
+        admin = self.client("admin")
+        for entry in (b"{kaputt", {"format": "x"}, small_archive(ranking="nichts"),
                       small_archive(ratings=[{"person": "A", "item": "9", "scores": {"genuss": 3}}]),
                       small_archive(ratings=[{"person": "A", "item": "1", "scores": {"genuss": 9}}])):
             self.upload(admin, entry)
-        self.assertEqual(self.store.archives(), [])
+        self.assertFalse(self.store.document("cola").exists())
 
-    def test_only_the_admin_changes_the_archive(self):
+    def test_only_the_admin_uploads_or_downloads(self):
+        player = self.client("a")
+        self.assertEqual(self.upload(player, small_archive()).status_code, 403)
         self.upload(self.client("admin"), small_archive())
+        self.assertEqual(player.get("/cola/export.json").status_code, 403)
+
+    def test_empty_tasting_page_and_unknown_slugs(self):
         player = self.client("a")
-        self.assertEqual(self.upload(player, small_archive(title="Gehackt")).status_code, 403)
-        self.assertEqual(self.post(player, "/admin/archiv/cola/delete").status_code, 403)
-        self.post(self.client("admin"), "/admin/archiv/cola/delete")
-        self.assertEqual(self.store.archives(), [])
+        self.assertIn("noch keine Ergebnisse", player.get("/wasser/").get_data(as_text=True))
+        self.assertEqual(player.get("/wasser/api/ergebnisse").status_code, 404)
+        for slug in ("nope", "chips-x", "..", "Cola"):
+            self.assertEqual(player.get(f"/{slug}/").status_code, 404, slug)
+        self.assertEqual(self.upload(self.client("admin"), small_archive(), slug="nope").status_code, 404)
 
-    def test_unknown_or_odd_ids_are_404(self):
+    def test_old_addresses_lead_to_the_new_ones(self):
         player = self.client("a")
-        for archive_id in ("nope", "..", "Cola", "%2e%2e%2fusers"):
-            self.assertEqual(player.get(f"/archiv/{archive_id}").status_code, 404, archive_id)
-            self.assertEqual(player.get(f"/api/archiv/{archive_id}").status_code, 404, archive_id)
+        for old, new in (("/einkauf", "/chips/einkauf"), ("/ergebnisse", "/chips/ergebnisse"), ("/schale/abc", "/chips/schale/abc"),
+                         ("/verkostungen", "/"), ("/archiv/cola", "/cola/"), ("/water", "/wasser/")):
+            response = player.get(old, follow_redirects=False)
+            while response.status_code in (301, 308) and not response.headers["Location"].endswith(new):
+                response = player.get(response.headers["Location"], follow_redirects=False)
+            self.assertTrue(response.headers.get("Location", "").endswith(new), old)
+        self.assertEqual(player.get("/schale/..%2fx").status_code, 404)
 
-    def test_login_lands_on_the_overview(self):
-        response = self.post(self.client(), "/login", user="a", passphrase=PASS)
-        self.assertTrue(response.headers["Location"].endswith("/verkostungen"))
+    def test_files_from_the_old_archive_folder_are_taken_over(self):
+        os.makedirs(os.path.join(self.tmp.name, "archive"))
+        with open(os.path.join(self.tmp.name, "archive", "wasser.json"), "w", encoding="utf-8") as f:
+            json.dump(small_archive(id="wasser"), f)
+        app = create_app(self.tmp.name)
+        self.assertTrue(app.extensions["store"].document("wasser").exists())
+        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "wasser.json")))
 
-    def test_overview_keeps_the_live_tasting_blind(self):
-        _, chips = self.add_chips()
-        body = self.client("a").get("/verkostungen").get_data(as_text=True)
-        self.assertIn("3</b> Schalen", body)
-        for secret in ("Geheimchip", "Funny"):
-            self.assertNotIn(secret, body)
+    def test_every_page_renders(self):
+        admin, chips = self.add_chips()
+        for client, urls in ((admin, ("/", "/chips/admin", "/chips/admin/daten", "/chips/einkauf", "/cola/", "/wasser/")),
+                             (self.client("a"), ("/", "/chips/", "/chips/einkauf", f"/chips/schale/{chips[0]['id']}",
+                                                 "/chips/enthuellung", "/chips/ergebnisse", "/cola/", "/wasser/"))):
+            for url in urls:
+                self.assertEqual(client.get(url).status_code, 200, url)
+
+    def test_every_page_of_a_tasting_uses_its_look(self):
+        player = self.client("a")
+        self.assertIn("css/master.css", player.get("/").get_data(as_text=True))
+        self.assertIn("css/master.css", self.client().get("/login").get_data(as_text=True))
+        chips = player.get("/chips/einkauf").get_data(as_text=True)
+        self.assertIn("css/style.css", chips)
+        self.assertIn('content="/chips/"', chips)
 
 
 class ArchiveStats(unittest.TestCase):
@@ -815,38 +869,38 @@ class Cleanup(Base):
         self.rate(self.client("b"), self.chip, 12)
 
     def test_data_page_lists_entries(self):
-        body = self.admin.get("/admin/daten").get_data(as_text=True)
+        body = self.admin.get("/chips/admin/daten").get_data(as_text=True)
         self.assertIn("Peinliche Notiz", body)
         self.assertIn("Alice", body)
 
     def test_delete_note_keeps_rating(self):
-        self.post(self.admin, f"/admin/daten/{self.chip}/a/note/delete")
+        self.post(self.admin, f"/chips/admin/daten/{self.chip}/a/note/delete")
         rating = self.store.read()["ratings"][self.chip]["a"]
         self.assertEqual(rating["notes"], "")
         self.assertEqual(rating["dc"], 10)
 
     def test_delete_rating(self):
-        self.post(self.admin, f"/admin/daten/{self.chip}/a/delete")
+        self.post(self.admin, f"/chips/admin/daten/{self.chip}/a/delete")
         self.assertEqual(list(self.store.read()["ratings"][self.chip]), ["b"])
 
     def test_delete_unknown_rating_is_404(self):
-        self.assertEqual(self.post(self.admin, f"/admin/daten/{self.chip}/nobody/delete").status_code, 404)
+        self.assertEqual(self.post(self.admin, f"/chips/admin/daten/{self.chip}/nobody/delete").status_code, 404)
 
     def test_admin_deletes_rated_chip_with_ratings(self):
-        self.post(self.admin, f"/chips/{self.chip}/delete")
+        self.post(self.admin, f"/chips/chips/{self.chip}/delete")
         data = self.store.read()
         self.assertNotIn(self.chip, data["ratings"])
         self.assertEqual(len(data["chips"]), 2)
 
     def test_players_cannot_cleanse(self):
-        for url in (f"/admin/daten/{self.chip}/b/delete", f"/admin/daten/{self.chip}/b/note/delete"):
+        for url in (f"/chips/admin/daten/{self.chip}/b/delete", f"/chips/admin/daten/{self.chip}/b/note/delete"):
             self.assertEqual(self.post(self.alice, url).status_code, 403)
         self.assertIn("b", self.store.read()["ratings"][self.chip])
 
     def test_reset_needs_the_word_and_keeps_logins(self):
-        self.post(self.admin, "/admin/reset", confirm="nein")
+        self.post(self.admin, "/chips/admin/reset", confirm="nein")
         self.assertEqual(len(self.store.read()["chips"]), 3)
-        self.post(self.admin, "/admin/reset", confirm="asche")
+        self.post(self.admin, "/chips/admin/reset", confirm="asche")
         data = self.store.read()
         self.assertEqual((data["chips"], data["ratings"], data["phase"]), ([], {}, "tasting"))
         self.assertIn("a", self.store.users())
@@ -855,28 +909,28 @@ class Cleanup(Base):
         backups = os.path.join(self.tmp.name, "backups")
         for name in os.listdir(backups):
             os.unlink(os.path.join(backups, name))
-        self.post(self.admin, f"/admin/daten/{self.chip}/a/delete")
+        self.post(self.admin, f"/chips/admin/daten/{self.chip}/a/delete")
         contents = [open(os.path.join(backups, n), encoding="utf-8").read() for n in os.listdir(backups)]
         self.assertTrue(any("Peinliche Notiz" in text for text in contents))
 
     def test_no_deleting_during_ceremony(self):
-        self.post(self.admin, "/admin/ceremony/start")
-        self.post(self.admin, f"/admin/daten/{self.chip}/a/delete")
-        self.post(self.admin, f"/chips/{self.chip}/delete")
+        self.post(self.admin, "/chips/admin/ceremony/start")
+        self.post(self.admin, f"/chips/admin/daten/{self.chip}/a/delete")
+        self.post(self.admin, f"/chips/chips/{self.chip}/delete")
         data = self.store.read()
         self.assertIn("a", data["ratings"][self.chip])
         self.assertEqual(len(data["chips"]), 3)
 
     def test_delete_after_reveal_updates_order(self):
-        self.post(self.admin, "/admin/ceremony/start")
+        self.post(self.admin, "/chips/admin/ceremony/start")
         headers = {"X-CSRF-Token": self.token(self.admin)}
-        last = self.admin.post("/api/ceremony/next", headers=headers).get_json()
+        last = self.admin.post("/chips/api/ceremony/next", headers=headers).get_json()
         self.assertEqual(last["phase"], "revealed")
-        self.post(self.admin, f"/chips/{self.chip}/delete")
+        self.post(self.admin, f"/chips/chips/{self.chip}/delete")
         data = self.store.read()
         self.assertEqual((data["ceremony_order"], data["reveal_count"]), ([], 0))
-        self.assertEqual(self.alice.get("/api/results").status_code, 200)
-        self.assertEqual(self.alice.get("/api/ceremony").status_code, 200)
+        self.assertEqual(self.alice.get("/chips/api/results").status_code, 200)
+        self.assertEqual(self.alice.get("/chips/api/ceremony").status_code, 200)
 
 
 class Persistence(Base):
@@ -901,7 +955,7 @@ class Persistence(Base):
         cookie = client.get_cookie("avernus").value
         restarted = create_app(self.tmp.name).test_client()
         restarted.set_cookie("avernus", cookie)
-        self.assertEqual(restarted.get("/").status_code, 200)
+        self.assertEqual(restarted.get("/chips/").status_code, 200)
 
     def test_failed_edit_leaves_data_untouched(self):
         with self.assertRaises(RuntimeError):
