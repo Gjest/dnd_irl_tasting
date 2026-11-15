@@ -1,6 +1,8 @@
 """The neutral part around all tastings: login, the start page with its
 tiles, old addresses and error pages."""
 
+from datetime import date
+
 from flask import (
     Blueprint,
     abort,
@@ -18,7 +20,7 @@ from flask import (
 
 from . import images, results, security, views
 from .registry import TASTINGS
-from .web import admin_required, login_required, store, wants_json
+from .web import admin_required, german_date, login_required, start_document, store, tasting_date, wants_json
 
 bp = Blueprint("core", __name__)
 
@@ -77,8 +79,39 @@ def landing():
         else:
             info = results.tile(tasting)
             href = url_for("results.page", slug=tasting["slug"])
+        info["date"] = tasting_date(tasting["slug"], info.get("date"))
         tiles.append({**tasting, **info, "href": href})
-    return render_template("landing.html", tiles=tiles, start=_start().read())
+    return render_template("landing.html", tiles=tiles, start=start_document().read())
+
+
+@bp.app_template_filter("german_date")
+def german_date_filter(iso):
+    return german_date(iso)
+
+
+@bp.post("/start/daten")
+@admin_required
+def set_dates():
+    """Saves the date of each tasting. An empty field falls back to the date its data brings."""
+    changes = {}
+    for tasting in TASTINGS:
+        value = request.form.get(f"date_{tasting['slug']}", "").strip()
+        if value:
+            try:
+                date.fromisoformat(value)
+            except ValueError:
+                flash(f"„{value}“ ist kein Datum. Nichts gespeichert.")
+                return redirect(url_for("core.landing"))
+        changes[tasting["slug"]] = value or None
+    with start_document().edit() as data:
+        dates = data.setdefault("dates", {})
+        for slug, value in changes.items():
+            if value:
+                dates[slug] = value
+            else:
+                dates.pop(slug, None)
+    flash("Die Daten stehen jetzt im Gildenbuch.")
+    return redirect(url_for("core.landing"))
 
 
 # --- Photos on the start page ------------------------------------------------
@@ -89,12 +122,8 @@ MAX_PHOTOS = 40
 MAX_CAPTION = 120
 
 
-def _start():
-    return store().document("start", empty=lambda: {"photos": [], "background": None})
-
-
 def _photo_names():
-    return {photo["name"] for photo in _start().read()["photos"]}
+    return {photo["name"] for photo in start_document().read()["photos"]}
 
 
 @bp.get("/fotos/<name>")
@@ -110,14 +139,14 @@ def photo(name):
 @bp.post("/start/fotos")
 @admin_required
 def add_photo():
-    if len(_start().read()["photos"]) >= MAX_PHOTOS:
+    if len(start_document().read()["photos"]) >= MAX_PHOTOS:
         flash(f"Mehr als {MAX_PHOTOS} Fotos passen nicht an die Wand.")
         return redirect(url_for("core.landing"))
     name, error = images.save_from_form(request.files, store().images_dir)
     if error or not name:
         flash(error or "Kein Foto ausgewählt.")
         return redirect(url_for("core.landing"))
-    with _start().edit() as data:
+    with start_document().edit() as data:
         data["photos"].append({"name": name, "caption": request.form.get("caption", "").strip()[:MAX_CAPTION]})
         if not data["background"]:
             data["background"] = name
@@ -130,7 +159,7 @@ def add_photo():
 def set_background(name):
     if name not in _photo_names():
         abort(404)
-    with _start().edit() as data:
+    with start_document().edit() as data:
         data["background"] = name
     flash("Neuer Hintergrund.")
     return redirect(url_for("core.landing"))
@@ -141,7 +170,7 @@ def set_background(name):
 def delete_photo(name):
     if not images.NAME_PATTERN.fullmatch(name) or name not in _photo_names():
         abort(404)
-    with _start().edit() as data:
+    with start_document().edit() as data:
         data["photos"] = [p for p in data["photos"] if p["name"] != name]
         if data["background"] == name:
             data["background"] = data["photos"][0]["name"] if data["photos"] else None

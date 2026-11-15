@@ -43,7 +43,7 @@ Give the laptop a fixed IP in your router. If the IP ever changes, update `BIND_
 
 ## All tastings in one place
 
-The start page, the guild hall, shows a tile per tasting. As admin you can hang photos there under "Gildenhalle schmücken". They form a gallery, and one of them becomes the page background. The login page shows no photos, because it is visible without logging in. Each tasting has its own look and lives at its own address:
+The start page, the guild hall, shows a tile per tasting. As admin you can hang photos there under "Gildenhalle schmücken". They form a gallery, and one of them becomes the page background. The login page shows no photos, because it is visible without logging in. Under "Daten der Verkostungen" the admin sets the date of each tasting. It shows on the tile and on the results page. Without one, a tile uses the date its data brings along, if any. Each tasting has its own look and lives at its own address:
 
 | Tile | Address | What it is |
 |---|---|---|
@@ -95,7 +95,7 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | File | Content |
 |---|---|
 | `data/tasting.json` | Chips and all ratings, plain JSON |
-| `data/start.json` | Photos on the start page and which one is the background |
+| `data/start.json` | Photos on the start page, the background, and the date of each tasting |
 | `data/cola.json`, `data/wasser.json` | Results of the finished tastings, written by the app after an upload |
 | `data/images/` | Photos of bags, re-encoded as JPEG |
 | `data/backups/` | A copy at most every 5 minutes while data changes, last 100 kept |

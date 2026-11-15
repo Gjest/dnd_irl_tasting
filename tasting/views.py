@@ -71,7 +71,7 @@ def tile():
     facts = [f"{len(chips)} Schalen", f"{len(tasting['shopping'])} auf der Einkaufsliste"]
     if g.user["role"] == "player" and chips and tasting["phase"] == "tasting":
         facts.append(f"{sum(1 for c in chips if me in tasting['ratings'].get(c['id'], {}))} von {len(chips)} bewertet")
-    return {"status": status, "live": tasting["phase"] != "revealed", "facts": facts, "winner": winner}
+    return {"status": status, "live": tasting["phase"] != "revealed", "facts": facts, "winner": winner, "date": None}
 
 
 # --- Tasting -------------------------------------------------------------

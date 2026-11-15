@@ -1,6 +1,6 @@
 {% extends "themed.html" %}
 {% block content %}
-<p class="eyebrow">Verkostung {{ tasting.number }} · Abgeschlossen</p>
+<p class="eyebrow">Verkostung {{ tasting.number }} · {% if when %}Abgeschlossen am {{ when|german_date }}{% else %}Abgeschlossen{% endif %}</p>
 <h1>{{ tasting.title }}</h1>
 <p class="lead">{{ entry.subtitle if entry and entry.subtitle else tasting.tagline }}</p>
 {% if entry %}

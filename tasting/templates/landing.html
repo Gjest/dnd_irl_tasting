@@ -17,7 +17,7 @@
       <span class="app-tile-icon" aria-hidden="true">{{ tile.icon }}</span>
       <span class="app-tile-status">{{ tile.status }}</span>
     </span>
-    <span class="app-tile-number">Verkostung {{ tile.number }}</span>
+    <span class="app-tile-number">Verkostung {{ tile.number }}{% if tile.date %} · <time datetime="{{ tile.date }}">{{ tile.date|german_date }}</time>{% endif %}</span>
     <span class="app-tile-title">{{ tile.title }}</span>
     <span class="app-tile-tagline">{{ tile.tagline }}</span>
     <span class="app-tile-facts">{{ tile.facts|join(' · ') }}</span>
@@ -41,6 +41,19 @@
 {% endif %}
 
 {% if user.role == 'admin' %}
+<details class="m-card m-admin">
+  <summary>Daten der Verkostungen</summary>
+  <p class="m-hint">Wann war welche Verkostung? Das Datum steht auf der Kachel und auf der Ergebnisseite. Ein leeres Feld nimmt das Datum, das die Daten der Verkostung mitbringen.</p>
+  <form method="post" action="{{ url_for('core.set_dates') }}" class="m-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for tile in tiles %}
+    <label class="m-field"><span>{{ tile.title }}</span>
+      <input type="date" name="date_{{ tile.slug }}" value="{{ start.get('dates', {}).get(tile.slug, '') }}"></label>
+    {% endfor %}
+    <button class="m-button" type="submit">Daten speichern</button>
+  </form>
+</details>
+
 <details class="m-card m-admin" {% if not start.photos %}open{% endif %}>
   <summary>Gildenhalle schmücken</summary>
   <p class="m-hint">Fotos erscheinen hier im Gildenbuch, eines davon als Hintergrund dieser Seite. Die Login-Seite zeigt keine Fotos, weil sie auch ohne Anmeldung zu sehen ist.</p>

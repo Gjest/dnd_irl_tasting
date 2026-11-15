@@ -12,7 +12,7 @@ from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_t
 
 from . import archive
 from .registry import TASTINGS, results_tasting
-from .web import admin_required, login_required, store
+from .web import admin_required, login_required, store, tasting_date
 
 bp = Blueprint("results", __name__)
 
@@ -33,13 +33,14 @@ def tile(tasting):
     """What the start page shows on this tasting's tile."""
     entry = _data(tasting["slug"])
     if entry is None:
-        return {"status": "Noch leer", "live": False, "facts": ["Noch keine Daten eingespielt"], "winner": None}
+        return {"status": "Noch leer", "live": False, "facts": ["Noch keine Daten eingespielt"], "winner": None, "date": None}
     summary = archive.summary(entry)
     return {
         "status": "Archiv",
         "live": False,
         "facts": [f"{summary['items']} Sorten", f"{summary['people']} Leute", f"{summary['ratings']} Wertungen"],
         "winner": summary["winner"],
+        "date": summary["date"],
     }
 
 
@@ -48,7 +49,8 @@ def tile(tasting):
 def page(slug):
     tasting = _tasting_or_404(slug)
     entry = _data(slug)
-    return render_template("results_page.html", tasting=tasting, entry=entry)
+    when = tasting_date(slug, entry.get("date") if entry else None)
+    return render_template("results_page.html", tasting=tasting, entry=entry, when=when)
 
 
 @bp.get("/<slug>/api/ergebnisse")

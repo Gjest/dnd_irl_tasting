@@ -853,6 +853,25 @@ class Tastings(Base):
         name = self.store.read()["chips"][0]["image"]
         self.assertEqual(self.client("b").get(f"/fotos/{name}").status_code, 404)
 
+    def test_admin_sets_dates_for_the_tiles(self):
+        admin, player = self.client("admin"), self.client("a")
+        self.upload(admin, small_archive(date="2026-03-01"))
+        self.assertIn("1. März 2026", player.get("/").get_data(as_text=True))
+        self.post(admin, "/start/daten", date_chips="2026-11-21", date_cola="2026-02-14", date_wasser="")
+        page = player.get("/").get_data(as_text=True)
+        self.assertIn('<time datetime="2026-11-21">21. November 2026</time>', page)
+        self.assertIn("14. Februar 2026", page)
+        self.assertNotIn("1. März 2026", page)
+        self.assertIn("Abgeschlossen am 14. Februar 2026", player.get("/cola/").get_data(as_text=True))
+        self.assertEqual(self.store.document("start").read()["dates"], {"chips": "2026-11-21", "cola": "2026-02-14"})
+
+    def test_bad_dates_and_players_change_nothing(self):
+        admin = self.client("admin")
+        self.post(admin, "/start/daten", date_chips="2026-11-21")
+        self.post(admin, "/start/daten", date_chips="morgen", date_cola="2026-02-14")
+        self.assertEqual(self.store.document("start").read()["dates"], {"chips": "2026-11-21"})
+        self.assertEqual(self.post(self.client("a"), "/start/daten", date_chips="2000-01-01").status_code, 403)
+
     def test_every_page_renders(self):
         admin, chips = self.add_chips()
         for client, urls in ((admin, ("/", "/chips/admin", "/chips/admin/daten", "/chips/einkauf", "/cola/", "/wasser/")),
