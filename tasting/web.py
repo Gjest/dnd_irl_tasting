@@ -12,7 +12,7 @@ def store():
 
 def start_document():
     """data/start.json: photos and dates for the start page, kept across tastings."""
-    return store().document("start", empty=lambda: {"photos": [], "background": None, "dates": {}})
+    return store().document("start", empty=lambda: {"photos": [], "background": None, "dates": {}, "table": None})
 
 
 def tasting_date(slug, fallback=None):

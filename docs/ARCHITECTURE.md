@@ -82,12 +82,13 @@ A finished tasting is one JSON file that brings its own questions along. The res
 1. **Results file:** turn the old data into a results file in the format above. `tools/` has two converters to start from.
 2. **Registry:** add an entry to `TASTINGS` in `registry.py`, for example:
    ```python
-   {"slug": "kaffee", "kind": "results", "number": 4, "title": "Kaffee-Verkostung",
+   {"slug": "kaffee", "kind": "results", "number": 4, "title": "Kaffee-Verkostung", "short": "Kaffee",
     "tagline": "…", "icon": "☕", "theme": "kaffee"}
    ```
 3. **Look:** add `static/css/theme-kaffee.css`. It sets the color variables of `style.css` (`--ash`, `--soot`, `--ember`, `--bone`, …) and the chart variables (`--series-1`, `--chart-text`, …) on `.theme-kaffee`, and can restyle headings. `theme-cola.css` and `theme-wasser.css` are short examples.
 4. **Tile color:** add `.app-tile-kaffee { --tile-a: …; --tile-b: …; }` to `master.css`.
 5. **Upload:** deploy, open the new tile as admin and upload the file. The app writes `data/kaffee.json`.
+6. **Table picture:** if the start page has one, mark the new tasting's dish under "Tafelbild". `short` is the label shown on the picture.
 
 No new Python code is needed. Routes, upload, download, backups and the results page come from `results.py`.
 

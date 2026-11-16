@@ -27,7 +27,7 @@ class ImageError(ValueError):
     pass
 
 
-def save_upload(upload, directory):
+def save_upload(upload, directory, max_side=MAX_SIDE):
     """Stores an uploaded photo and returns its file name, or None if there was none."""
     if upload is None or not upload.filename:
         return None
@@ -44,7 +44,7 @@ def save_upload(upload, directory):
         raise
     except (UnidentifiedImageError, Image.DecompressionBombError, Image.DecompressionBombWarning, OSError, ValueError):
         raise ImageError("Das Foto ließ sich nicht lesen. Erlaubt sind JPEG, PNG und WebP.") from None
-    picture.thumbnail((MAX_SIDE, MAX_SIDE))
+    picture.thumbnail((max_side, max_side))
     directory = Path(directory)
     directory.mkdir(exist_ok=True)
     name = f"{secrets.token_hex(16)}.jpg"
@@ -54,7 +54,7 @@ def save_upload(upload, directory):
     return name
 
 
-def save_from_form(files, directory):
+def save_from_form(files, directory, max_side=MAX_SIDE):
     """Saves the photo from a form with a camera button and a file button.
 
     Both inputs are called "image" and at most one carries a file. Returns
@@ -62,9 +62,15 @@ def save_from_form(files, directory):
     """
     upload = next((f for f in files.getlist("image") if f.filename), None)
     try:
-        return save_upload(upload, directory), None
+        return save_upload(upload, directory, max_side), None
     except ImageError as error:
         return None, str(error)
+
+
+def aspect(directory, name):
+    """Height divided by width of a stored photo."""
+    with Image.open(Path(directory) / name) as picture:
+        return picture.height / picture.width
 
 
 def referenced(data):

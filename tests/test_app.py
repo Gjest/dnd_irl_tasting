@@ -872,6 +872,62 @@ class Tastings(Base):
         self.assertEqual(self.store.document("start").read()["dates"], {"chips": "2026-11-21"})
         self.assertEqual(self.post(self.client("a"), "/start/daten", date_chips="2000-01-01").status_code, 403)
 
+    def table(self, client, size=(400, 200)):
+        return client.post("/start/tafel", data={"csrf_token": self.token(client),
+                                                 "image": (io.BytesIO(photo_bytes(size=size)), "tafel.png")},
+                           content_type="multipart/form-data")
+
+    def test_table_picture_with_clickable_dishes(self):
+        admin, player = self.client("admin"), self.client("a")
+        self.assertNotIn("m-table-spots", player.get("/").get_data(as_text=True))
+        self.table(admin)
+        table = self.store.document("start").read()["table"]
+        self.assertEqual((table["aspect"], table["spots"]), (0.5, {}))
+        self.post(admin, "/start/tafel/punkte", spot_chips_x="25", spot_chips_y="60", spot_chips_r="8",
+                  spot_cola_x="", spot_cola_y="", spot_cola_r="8", spot_wasser_x="70.5", spot_wasser_y="40", spot_wasser_r="6")
+        self.assertEqual(self.store.document("start").read()["table"]["spots"],
+                         {"chips": {"x": 25, "y": 60, "r": 8}, "wasser": {"x": 70.5, "y": 40, "r": 6}})
+        page = player.get("/").get_data(as_text=True)
+        self.assertIn('viewBox="0 0 100 50.0"', page)
+        self.assertIn('<a href="/chips/" class="m-spot">', page)
+        self.assertIn('cx="25.0" cy="30.0" r="8.0"', page)
+        self.assertNotIn('<a href="/cola/" class="m-spot">', page)
+        self.assertNotIn("spot-editor", page)
+        self.assertEqual(player.get(f"/fotos/{table['image']}").status_code, 200)
+        self.assertEqual(self.client().get(f"/fotos/{table['image']}").status_code, 302)
+
+    def test_bad_spots_change_nothing(self):
+        admin = self.client("admin")
+        self.table(admin)
+        self.post(admin, "/start/tafel/punkte", spot_chips_x="25", spot_chips_y="60", spot_chips_r="8")
+        for bad in ({"spot_chips_x": "120", "spot_chips_y": "60", "spot_chips_r": "8"},
+                    {"spot_chips_x": "nan", "spot_chips_y": "60", "spot_chips_r": "8"},
+                    {"spot_chips_x": "25", "spot_chips_y": "60", "spot_chips_r": "90"}):
+            self.post(admin, "/start/tafel/punkte", **bad)
+        self.post(admin, "/start/tafel/punkte", spot_nope_x="10", spot_nope_y="10", spot_nope_r="5")
+        self.assertEqual(self.store.document("start").read()["table"]["spots"], {})
+        self.post(admin, "/start/tafel/punkte", spot_chips_x="25", spot_chips_y="60", spot_chips_r="8")
+        self.assertEqual(list(self.store.document("start").read()["table"]["spots"]), ["chips"])
+
+    def test_replacing_and_removing_the_table(self):
+        admin = self.client("admin")
+        self.table(admin)
+        self.post(admin, "/start/tafel/punkte", spot_chips_x="25", spot_chips_y="60", spot_chips_r="8")
+        first = self.store.document("start").read()["table"]["image"]
+        self.table(admin, size=(300, 300))
+        table = self.store.document("start").read()["table"]
+        self.assertEqual((table["aspect"], list(table["spots"])), (1.0, ["chips"]))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "images", first)))
+        self.post(admin, "/start/tafel/loeschen")
+        self.assertIsNone(self.store.document("start").read()["table"])
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "images", table["image"])))
+
+    def test_only_the_admin_sets_the_table(self):
+        player = self.client("a")
+        self.assertEqual(self.table(player).status_code, 403)
+        self.assertEqual(self.post(player, "/start/tafel/punkte", spot_chips_x="1", spot_chips_y="1", spot_chips_r="5").status_code, 403)
+        self.assertEqual(self.post(player, "/start/tafel/loeschen").status_code, 403)
+
     def test_every_page_renders(self):
         admin, chips = self.add_chips()
         for client, urls in ((admin, ("/", "/chips/admin", "/chips/admin/daten", "/chips/einkauf", "/cola/", "/wasser/")),

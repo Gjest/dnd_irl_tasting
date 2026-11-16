@@ -11,7 +11,7 @@ from .store import Store
 
 MAX_REQUEST_BYTES = 64 * 1024
 # Only these forms carry a photo. Everything else keeps the small limit.
-UPLOAD_ENDPOINTS = {"main.add_chip", "main.update_chip", "main.add_item", "main.update_item", "main.admin_import", "results.upload", "core.add_photo"}
+UPLOAD_ENDPOINTS = {"main.add_chip", "main.update_chip", "main.add_item", "main.update_item", "main.admin_import", "results.upload", "core.add_photo", "core.set_table"}
 
 
 def _allowed_host():

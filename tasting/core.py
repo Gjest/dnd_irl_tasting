@@ -123,7 +123,11 @@ MAX_CAPTION = 120
 
 
 def _photo_names():
-    return {photo["name"] for photo in start_document().read()["photos"]}
+    start = start_document().read()
+    names = {photo["name"] for photo in start["photos"]}
+    if start.get("table"):
+        names.add(start["table"]["image"])
+    return names
 
 
 @bp.get("/fotos/<name>")
@@ -224,3 +228,73 @@ def handle_error(error):
     if wants_json():
         return jsonify({"error": error.code}), error.code
     return render_template("error.html", code=error.code), error.code
+
+
+# --- The table picture --------------------------------------------------------
+# A painted tavern table on the start page. Each tasting sits on it as a dish
+# the admin marks with a spot; clicking a spot opens that tasting.
+
+TABLE_MAX_SIDE = 2560
+
+
+def _number(value, low, high):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    # `low <= number <= high` is False for NaN, so that is refused too.
+    return round(number, 2) if low <= number <= high else None
+
+
+@bp.post("/start/tafel")
+@admin_required
+def set_table():
+    name, error = images.save_from_form(request.files, store().images_dir, TABLE_MAX_SIDE)
+    if error or not name:
+        flash(error or "Kein Bild ausgewählt.")
+        return redirect(url_for("core.landing"))
+    old = None
+    with start_document().edit() as data:
+        table = data.get("table") or {"spots": {}}
+        old = table.get("image")
+        table.update(image=name, aspect=round(images.aspect(store().images_dir, name), 4))
+        data["table"] = table
+    if old and old != name:
+        (store().images_dir / old).unlink(missing_ok=True)
+    flash("Das Tafelbild hängt. Jetzt noch die Verkostungen auf dem Tisch markieren.")
+    return redirect(url_for("core.landing"))
+
+
+@bp.post("/start/tafel/punkte")
+@admin_required
+def set_spots():
+    spots = {}
+    for tasting in TASTINGS:
+        slug = tasting["slug"]
+        if not request.form.get(f"spot_{slug}_x", "").strip():
+            continue  # this tasting has no dish on the table
+        x = _number(request.form.get(f"spot_{slug}_x"), 0, 100)
+        y = _number(request.form.get(f"spot_{slug}_y"), 0, 100)
+        r = _number(request.form.get(f"spot_{slug}_r"), 1, 30)
+        if None in (x, y, r):
+            flash("Ein Punkt liegt außerhalb des Bildes. Nichts gespeichert.")
+            return redirect(url_for("core.landing"))
+        spots[slug] = {"x": x, "y": y, "r": r}
+    with start_document().edit() as data:
+        if not data.get("table"):
+            abort(404)
+        data["table"]["spots"] = spots
+    flash("Die Verkostungen stehen auf dem Tisch.")
+    return redirect(url_for("core.landing"))
+
+
+@bp.post("/start/tafel/loeschen")
+@admin_required
+def delete_table():
+    with start_document().edit() as data:
+        table = data.get("table")
+        data["table"] = None
+    if table:
+        (store().images_dir / table["image"]).unlink(missing_ok=True)
+    flash("Tafelbild entfernt.")
+    return redirect(url_for("core.landing"))

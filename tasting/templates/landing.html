@@ -10,6 +10,26 @@
 <p class="m-eyebrow">Die Verkostungsgilde</p>
 <h1 class="m-title">Willkommen zurück, {{ user.name }}</h1>
 <p class="m-lead">Welches Abenteuer kostest du heute?</p>
+{% set table = start.get('table') %}
+{% if table %}
+{% set height = 100 * table.aspect %}
+<figure class="m-table">
+  <div class="m-table-frame">
+  <img src="{{ url_for('core.photo', name=table.image) }}" alt="Die Gilde an der Tafel, auf dem Tisch die Verkostungen">
+  <svg class="m-table-spots" viewBox="0 0 100 {{ height }}" aria-label="Verkostungen auf dem Tisch">
+    {% for tile in tiles if table.spots.get(tile.slug) %}
+    {% set spot = table.spots[tile.slug] %}
+    <a href="{{ tile.href }}" class="m-spot">
+      <title>{{ tile.title }}</title>
+      <circle cx="{{ spot.x }}" cy="{{ spot.y * table.aspect }}" r="{{ spot.r }}"></circle>
+      <text x="{{ spot.x }}" y="{{ spot.y * table.aspect + spot.r + 4 }}" text-anchor="middle">{{ tile.short or tile.title }}</text>
+    </a>
+    {% endfor %}
+  </svg>
+  </div>
+  <figcaption class="m-hint">Tippe auf eine Speise auf dem Tisch, oder wähle unten eine Verkostung.</figcaption>
+</figure>
+{% endif %}
 <nav class="tiles-grid" aria-label="Verkostungen">
   {% for tile in tiles %}
   <a class="app-tile app-tile-{{ tile.slug }}{% if tile.live %} app-tile-live{% endif %}" href="{{ tile.href }}">
@@ -41,6 +61,49 @@
 {% endif %}
 
 {% if user.role == 'admin' %}
+<details class="m-card m-admin" {% if table and not table.spots %}open{% endif %}>
+  <summary>Tafelbild</summary>
+  <p class="m-hint">Ein Bild der Gilde am Tisch, ganz oben auf dieser Seite. Danach markierst du, wo welche Verkostung auf dem Tisch steht. Ein neues Bild ersetzt das alte, die Markierungen bleiben.</p>
+  <form method="post" action="{{ url_for('core.set_table') }}" class="m-stack" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {{ photo_picker('Bild') }}
+    <button class="m-button" type="submit">{% if table %}Bild ersetzen{% else %}Bild aufhängen{% endif %}</button>
+  </form>
+  {% if table %}
+  <form method="post" action="{{ url_for('core.set_spots') }}" class="m-stack m-spot-editor" id="spot-editor" data-aspect="{{ table.aspect }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <p class="m-hint">Wähle eine Verkostung und tippe dann im Bild auf ihre Speise. Mit dem Regler stellst du die Größe ein.</p>
+    <div class="m-table-frame m-table-edit">
+      <img src="{{ url_for('core.photo', name=table.image) }}" alt="Tafelbild zum Markieren">
+      <svg class="m-table-spots" viewBox="0 0 100 {{ height }}" aria-hidden="true">
+        {% for tile in tiles %}
+        {% set spot = table.spots.get(tile.slug) %}
+        <g class="m-spot-preview" data-slug="{{ tile.slug }}" {% if not spot %}visibility="hidden"{% endif %}>
+          <circle cx="{{ spot.x if spot else 50 }}" cy="{{ (spot.y if spot else 50) * table.aspect }}" r="{{ spot.r if spot else 8 }}"></circle>
+          <text x="{{ spot.x if spot else 50 }}" y="{{ (spot.y if spot else 50) * table.aspect }}" text-anchor="middle" dominant-baseline="central">{{ tile.icon }}</text>
+        </g>
+        {% endfor %}
+      </svg>
+    </div>
+    {% for tile in tiles %}
+    {% set spot = table.spots.get(tile.slug) %}
+    <div class="m-spot-row" data-slug="{{ tile.slug }}">
+      <label class="m-check"><input type="radio" name="active" value="{{ tile.slug }}" {% if loop.first %}checked{% endif %}> {{ tile.icon }} {{ tile.title }}</label>
+      <input type="hidden" name="spot_{{ tile.slug }}_x" value="{{ spot.x if spot else '' }}">
+      <input type="hidden" name="spot_{{ tile.slug }}_y" value="{{ spot.y if spot else '' }}">
+      <label class="m-range">Größe <input type="range" name="spot_{{ tile.slug }}_r" min="2" max="25" step="0.5" value="{{ spot.r if spot else 8 }}"></label>
+      <button type="button" class="m-link m-danger" data-clear="{{ tile.slug }}">Nicht auf dem Tisch</button>
+    </div>
+    {% endfor %}
+    <button class="m-button" type="submit">Markierungen speichern</button>
+  </form>
+  <form method="post" action="{{ url_for('core.delete_table') }}" data-confirm="Das Tafelbild entfernen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="m-link m-danger" type="submit">Tafelbild entfernen</button>
+  </form>
+  {% endif %}
+</details>
+
 <details class="m-card m-admin">
   <summary>Daten der Verkostungen</summary>
   <p class="m-hint">Wann war welche Verkostung? Das Datum steht auf der Kachel und auf der Ergebnisseite. Ein leeres Feld nimmt das Datum, das die Daten der Verkostung mitbringen.</p>
@@ -89,3 +152,4 @@
 </details>
 {% endif %}
 {% endblock %}
+{% block scripts %}{% if user.role == 'admin' and start.get('table') %}<script src="{{ url_for('static', filename='js/table.js') }}"></script>{% endif %}{% endblock %}
