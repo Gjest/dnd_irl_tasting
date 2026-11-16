@@ -11,7 +11,7 @@ from .store import Store
 
 MAX_REQUEST_BYTES = 64 * 1024
 # Only these forms carry a photo. Everything else keeps the small limit.
-UPLOAD_ENDPOINTS = {"main.add_chip", "main.update_chip", "main.add_item", "main.update_item", "main.admin_import", "results.upload", "core.add_photo", "core.set_table"}
+UPLOAD_ENDPOINTS = {"main.add_chip", "main.update_chip", "main.add_item", "main.update_item", "main.admin_import", "results.upload", "core.add_photo", "core.set_table", "plans.upload"}
 
 
 def _allowed_host():
@@ -72,9 +72,11 @@ def create_app(data_dir=None):
             "user": g.get("user"),
         }
 
-    from . import core, results, views
+    from . import core, ideas, plans, results, views
 
     app.register_blueprint(core.bp)
+    app.register_blueprint(plans.bp)
+    app.register_blueprint(ideas.bp)
     # Each tasting lives below its own address. A new live tasting gets its own prefix.
     app.register_blueprint(views.bp, url_prefix="/chips")
     app.register_blueprint(results.bp)

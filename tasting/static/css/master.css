@@ -168,6 +168,64 @@ code { padding: .1em .35em; border-radius: 4px; background: rgba(0, 0, 0, .25); 
 .m-table-link:hover, .m-table-link:focus-visible { border-color: var(--brass); background: rgba(226, 182, 92, .15); }
 .m-table-link b { padding: .05rem .5rem; font-size: .72rem; color: #2a1608; background: var(--brass); border-radius: 999px; }
 
+/* Below the tastings: what is planned, the idea list, and the + tile. */
+.app-tile-plan {
+  --tile-a: #4a3a26; --tile-b: #1d140c;
+  border-style: dashed;
+}
+.app-tile-plan .app-tile-status { color: var(--candle); border-color: rgba(255, 179, 92, .6); }
+.app-tile-ideas { --tile-a: #5b4a22; --tile-b: #221a0c; }
+.app-tile-add {
+  align-items: center; justify-content: center; text-align: center;
+  background: rgba(0, 0, 0, .22); border: 2px dashed rgba(226, 182, 92, .55); box-shadow: none;
+}
+.app-tile-add::after { display: none; }
+.app-tile-plus {
+  display: grid; place-items: center; width: 72px; height: 72px; margin-bottom: .6rem;
+  font: 400 3rem/1 Lato, sans-serif; color: var(--brass);
+  border: 2px solid rgba(226, 182, 92, .55); border-radius: 50%;
+}
+
+/* A planned tasting: its questions as a preview, the editor below for the admin. */
+.m-plan-section { margin-top: 1.4rem; }
+.m-plan-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1rem; margin: 0 0 .8rem; }
+.m-plan-head h2 { margin: 0; font: 700 1.15rem Cinzel, Georgia, serif; color: var(--brass); }
+.m-plan-head form { margin: 0; }
+.m-questions { list-style: none; margin: 0; padding: 0; counter-reset: q; }
+.m-question { display: grid; grid-template-columns: 1fr auto; gap: .3rem 1rem; padding: .8rem 0; border-top: 1px solid rgba(226, 182, 92, .2); counter-increment: q; }
+.m-question-label::before { content: counter(q) ". "; color: var(--brass-dim); }
+.m-question-label { font-weight: 700; }
+.m-question-kind { color: var(--muted); font-size: .85rem; }
+.m-scale-preview { grid-column: 1 / -1; display: flex; align-items: center; gap: .5rem; color: var(--muted); font-size: .88rem; }
+.m-scale-preview .m-dots { display: flex; gap: .3rem; }
+.m-scale-preview .m-dots span { display: grid; place-items: center; width: 26px; height: 26px; font-size: .78rem; border: 1px solid rgba(226, 182, 92, .45); border-radius: 50%; }
+.m-text-preview { grid-column: 1 / -1; height: 2.2rem; border: 1px dashed rgba(226, 182, 92, .35); border-radius: 8px; }
+.m-question .m-actions { grid-column: 1 / -1; font-size: .9rem; }
+.m-inline-form { display: grid; gap: .8rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed rgba(226, 182, 92, .3); }
+@media (min-width: 640px) { .m-inline-form.m-two { grid-template-columns: 1fr 1fr; } .m-inline-form .m-wide { grid-column: 1 / -1; } }
+.m-field textarea { width: 100%; padding: .6rem .75rem; font: 400 1rem Lato, system-ui, sans-serif; color: var(--text); background: rgba(0, 0, 0, .3); border: 1px solid rgba(226, 182, 92, .35); border-radius: 8px; }
+.m-button-quiet { color: var(--text); background: rgba(0, 0, 0, .3); border-color: rgba(226, 182, 92, .45); box-shadow: none; }
+
+/* The idea list: name, who added it, average stars, your stars. */
+.m-ideas { list-style: none; margin: 1.4rem 0 0; padding: 0; }
+.m-idea { display: grid; grid-template-columns: 2.4rem 1fr; gap: .2rem 1rem; padding: 1rem 0; border-top: 1px solid rgba(226, 182, 92, .2); scroll-margin-top: 5rem; }
+.m-idea > :not(.m-idea-rank) { grid-column: 2; margin: 0; }
+.m-idea-rank { grid-row: span 4; font: 900 1.4rem Cinzel, Georgia, serif; color: var(--brass-dim); text-align: center; }
+.m-idea:first-child .m-idea-rank { color: var(--brass); }
+.m-idea-name { font: 700 1.15rem Cinzel, Georgia, serif; overflow-wrap: anywhere; }
+.m-idea-meta { color: var(--muted); font-size: .88rem; }
+.m-stars { display: flex; flex-wrap: wrap; align-items: center; gap: .1rem; margin: .2rem 0 0; }
+.m-star {
+  min-width: 44px; min-height: 44px; padding: 0;
+  font-size: 1.7rem; line-height: 1; color: rgba(226, 182, 92, .35);
+  background: none; border: 0; border-radius: 8px; cursor: pointer;
+}
+.m-star[aria-pressed="true"], .m-star.is-on { color: var(--candle); text-shadow: 0 0 10px rgba(255, 179, 92, .45); }
+.m-star:hover { color: var(--brass); }
+.m-stars .m-hint { margin-left: .5rem; }
+.m-add-idea { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-end; }
+.m-add-idea .m-field { flex: 1 1 16rem; }
+
 /* The table picture: the guild at the table, the tastings as dishes on it. */
 .m-table { margin: 0 0 2rem; }
 .m-table-frame {

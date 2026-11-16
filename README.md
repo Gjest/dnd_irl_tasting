@@ -53,6 +53,11 @@ The start page, the guild hall, shows a tile per tasting. As admin you can hang 
 
 The cola and water results come in once as an upload. As admin, open the tile and upload the file under "Daten verwalten". The app writes it to `data/cola.json` or `data/wasser.json` and reads only that file from then on. Each upload replaces the old file, which goes to `data/backups/` first. Files uploaded with the previous version under `data/archive/` are taken over on the next start. The files were built from the old sources with the scripts in `tools/`. The water tasting recorded real names, which `export/aliase.json` maps to the group's nicknames during the conversion. Both stay out of git.
 
+Below the tastings, "Was als Nächstes?" holds what is coming:
+
+- **Ideensammlung** (`/ideen`): everyone adds ideas for the next tasting, just a name, and gives each idea one to five stars. Tapping your own rating again takes it back. The list is sorted by average stars. Whoever added an idea, and the admin, can remove it.
+- **Planned tastings** (`/plaene/<name>`): the admin starts one with the + tile, gives it a name and adds questions in sections, as scales (with words for both ends) or free text. It shows as "Bald" on the start page, and everyone can read its questions. "Vorlage herunterladen" saves the questions as a JSON file (`tasting-template/1`), which "Neues Tasting planen" takes in again.
+
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) also has the plan for future tastings.
 
 ## Cleaning up data
@@ -97,6 +102,8 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | `data/tasting.json` | Chips and all ratings, plain JSON |
 | `data/start.json` | Photos on the start page, the background, the table picture with its dishes, and the date of each tasting |
 | `data/cola.json`, `data/wasser.json` | Results of the finished tastings, written by the app after an upload |
+| `data/plans.json` | Planned tastings with their questions |
+| `data/ideas.json` | The idea list with everyone's stars |
 | `data/images/` | Photos of bags, re-encoded as JPEG |
 | `data/backups/` | A copy at most every 5 minutes while data changes, last 100 kept |
 | `data/users.json` | Names and passphrase hashes |

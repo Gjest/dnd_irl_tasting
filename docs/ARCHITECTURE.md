@@ -16,6 +16,8 @@ The group has tasted cola (Google Forms), water (a Spring app) and chips (this a
 /login            guild hall login, one login for every tasting   core.py, login.html
 /chips/…          the live chips tasting, Avernus look            views.py (blueprint "main"), base.html, style.css
 /cola/  /wasser/  finished tastings, each in its own look         results.py, results_page.html, theme-<slug>.css
+/plaene/…         planned tastings: name and questions, "Bald"    plans.py, plan.html, plan_new.html
+/ideen            the idea list with stars                        ideas.py, ideas.html
 ```
 
 | Module | Job | Reused by |
@@ -88,9 +90,23 @@ A finished tasting is one JSON file that brings its own questions along. The res
 3. **Look:** add `static/css/theme-kaffee.css`. It sets the color variables of `style.css` (`--ash`, `--soot`, `--ember`, `--bone`, …) and the chart variables (`--series-1`, `--chart-text`, …) on `.theme-kaffee`, and can restyle headings. `theme-cola.css` and `theme-wasser.css` are short examples.
 4. **Tile color:** add `.app-tile-kaffee { --tile-a: …; --tile-b: …; }` to `master.css`.
 5. **Upload:** deploy, open the new tile as admin and upload the file. The app writes `data/kaffee.json`.
-6. **Table picture:** if the start page has one, mark the new tasting's dish under "Tafelbild". `short` is the label shown on the picture. Until then the tasting is still reachable through the links below the picture and in the tile view.
+6. **Table picture:** if the start page has one, mark the new tasting's dish under "Tafelbild". `short` is the name in the links below the picture. Until then the tasting is still reachable through the links below the picture and in the tile view.
 
 No new Python code is needed. Routes, upload, download, backups and the results page come from `results.py`.
+
+### From a planned tasting
+
+A planned tasting (`plans.py`, `data/plans.json`) is the skeleton: name, icon, tagline and questions, nothing else. Its template uses the same `sections` and `criteria` as a results file, plus `"type": "scale"` or `"text"` per question:
+
+```json
+{"format": "tasting-template/1", "title": "Kaffee-Verkostung", "short": "Kaffee", "icon": "☕", "tagline": "…",
+ "scale": {"min": 1, "max": 5},
+ "sections": [{"title": "Die Nase", "criteria": [
+   {"key": "duft", "label": "Duft", "type": "scale", "low": "kaum", "high": "betörend"},
+   {"key": "was_riechst_du", "label": "Was riechst du?", "type": "text"}]}]}
+```
+
+Keys come from the labels and are made unique by the app. When the tasting gets built, download the template, copy the live code as below and take the questions from it. Free-text questions become notes. Then add the tasting to the registry and remove the plan.
 
 ### A new live tasting
 

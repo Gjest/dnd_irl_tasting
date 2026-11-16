@@ -960,11 +960,112 @@ class Tastings(Base):
         self.assertEqual(self.post(player, "/start/tafel/punkte", spot_chips_x="1", spot_chips_y="1", spot_chips_r="5").status_code, 403)
         self.assertEqual(self.post(player, "/start/tafel/loeschen").status_code, 403)
 
+    def ideas(self):
+        return {i["name"]: i for i in self.store.document("ideas").read()["ideas"]}
+
+    def test_idea_list_with_stars(self):
+        alice, bob, admin = self.client("a"), self.client("b"), self.client("admin")
+        self.post(alice, "/ideen", name="  Saure Gurken ")
+        self.post(bob, "/ideen", name="saure gurken")  # the same idea, only written differently
+        self.post(bob, "/ideen", name="Energydrinks")
+        self.post(bob, "/ideen", name="   ")
+        ideas = self.ideas()
+        self.assertEqual(sorted(ideas), ["Energydrinks", "Saure Gurken"])
+        self.assertEqual((ideas["Saure Gurken"]["by"], ideas["Energydrinks"]["by"]), ("a", "b"))
+        gurken, drinks = ideas["Saure Gurken"]["id"], ideas["Energydrinks"]["id"]
+        self.post(alice, f"/ideen/{gurken}/sterne", stars="3")
+        self.post(bob, f"/ideen/{gurken}/sterne", stars="2")
+        self.post(alice, f"/ideen/{drinks}/sterne", stars="5")
+        self.post(alice, f"/ideen/{drinks}/sterne", stars="4")  # changed her mind
+        self.assertEqual(self.ideas()["Energydrinks"]["ratings"], {"a": 4})
+        for bad in ("0", "6", "viel"):
+            self.assertEqual(self.post(alice, f"/ideen/{gurken}/sterne", stars=bad).status_code, 400)
+        self.assertEqual(self.post(alice, "/ideen/nope/sterne", stars="3").status_code, 404)
+        page = alice.get("/ideen").get_data(as_text=True)
+        # Best average first: Energydrinks (4) above Saure Gurken (2.5).
+        self.assertLess(page.index('"m-idea-name">Energydrinks'), page.index('"m-idea-name">Saure Gurken'))
+        self.assertIn("★ 2,5 aus 2 Wertungen", page)
+        self.assertIn("Deine Wertung: 4.", page)
+        landing = bob.get("/").get_data(as_text=True)
+        self.assertIn("2 Ideen", landing)
+        self.assertIn("★ Energydrinks", landing)
+        # Tapping your own rating again takes it back.
+        self.post(alice, f"/ideen/{drinks}/sterne", stars="4")
+        self.assertEqual(self.ideas()["Energydrinks"]["ratings"], {})
+        # Only whoever added an idea, or the admin, takes it off the list.
+        self.assertEqual(self.post(bob, f"/ideen/{gurken}/loeschen").status_code, 403)
+        self.post(alice, f"/ideen/{gurken}/loeschen")
+        self.post(admin, f"/ideen/{drinks}/loeschen")
+        self.assertEqual(self.ideas(), {})
+        self.assertEqual(self.client().get("/ideen").status_code, 302)
+
+    def plans(self):
+        return {p["slug"]: p for p in self.store.document("plans").read()["plans"]}
+
+    def test_plan_a_tasting_and_its_questions(self):
+        admin, player = self.client("admin"), self.client("a")
+        self.assertNotIn("/plaene/neu", player.get("/").get_data(as_text=True))
+        self.assertEqual(player.get("/plaene/neu").status_code, 403)
+        self.assertEqual(self.post(player, "/plaene/neu", title="Heimlich").status_code, 403)
+        self.assertIn("/plaene/neu", admin.get("/").get_data(as_text=True))
+        response = self.post(admin, "/plaene/neu", title="Kaffee-Verkostung", short="Kaffee", icon="☕", tagline="Von Discounter bis Rösterei")
+        self.assertEqual(response.headers["Location"], "/plaene/kaffee-verkostung")
+        base = "/plaene/kaffee-verkostung"
+        self.post(admin, f"{base}/abschnitt", title="Die Nase")
+        self.post(admin, f"{base}/abschnitt/0/frage", label="Duft", type="scale", low="kaum", high="betörend")
+        self.post(admin, f"{base}/abschnitt/0/frage", label="Was riechst du?", type="text", low="ignored")
+        self.post(admin, f"{base}/abschnitt/0/frage", label="Duft", type="scale")
+        self.post(admin, f"{base}/abschnitt/0/frage", label="Kaputt", type="quiz")
+        self.post(admin, f"{base}/abschnitt/0/frage/1/hoch")
+        criteria = self.plans()["kaffee-verkostung"]["sections"][0]["criteria"]
+        self.assertEqual([(c["key"], c["type"]) for c in criteria],
+                         [("was_riechst_du", "text"), ("duft", "scale"), ("duft_2", "scale")])
+        self.assertEqual((criteria[1]["low"], criteria[1]["high"]), ("kaum", "betörend"))
+        self.assertNotIn("low", criteria[0])
+        self.post(admin, f"{base}/abschnitt/0/frage/2/loeschen")
+        self.assertEqual(self.post(admin, f"{base}/abschnitt/5/frage/0/loeschen").status_code, 404)
+        # Everyone sees it as coming soon, only the admin can edit it.
+        landing = player.get("/").get_data(as_text=True)
+        self.assertIn(f'class="app-tile app-tile-plan" href="{base}"', landing)
+        self.assertIn("Bald", landing)
+        self.assertIn("2 Fragen · 1 Abschnitt", landing)
+        page = player.get(base).get_data(as_text=True)
+        self.assertIn("Was riechst du?", page)
+        self.assertNotIn("Frage hinzufügen", page)
+        self.assertIn("Frage hinzufügen", admin.get(base).get_data(as_text=True))
+        self.assertEqual(self.post(player, f"{base}/abschnitt/0/frage", label="X", type="text").status_code, 403)
+        self.assertEqual(player.get(f"{base}/vorlage.json").status_code, 403)
+        # The template goes out and comes back in as a new plan with the same questions.
+        template = json.loads(admin.get(f"{base}/vorlage.json").get_data(as_text=True))
+        self.assertEqual(template["format"], "tasting-template/1")
+        self.assertNotIn("slug", template)
+        response = admin.post("/plaene/import", data={"csrf_token": self.token(admin), "file": (io.BytesIO(json.dumps(template).encode()), "v.json")},
+                              content_type="multipart/form-data")
+        self.assertEqual(response.headers["Location"], "/plaene/kaffee-verkostung-2")
+        self.assertEqual(self.plans()["kaffee-verkostung-2"]["sections"], self.plans()["kaffee-verkostung"]["sections"])
+        for bad in (b"{nope", json.dumps({"format": "other", "title": "x"}).encode(),
+                    json.dumps({"format": "tasting-template/1", "title": "x", "sections": [{"criteria": [{"label": "x", "type": "quiz"}]}]}).encode()):
+            admin.post("/plaene/import", data={"csrf_token": self.token(admin), "file": (io.BytesIO(bad), "v.json")},
+                       content_type="multipart/form-data")
+        self.assertEqual(len(self.plans()), 2)
+        # A name that matches an existing address gets its own.
+        self.post(admin, "/plaene/neu", title="Chips")
+        self.assertIn("chips-2", self.plans())
+        self.post(admin, "/plaene/kaffee-verkostung/loeschen")
+        self.assertEqual(sorted(self.plans()), ["chips-2", "kaffee-verkostung-2"])
+        self.assertEqual(player.get("/plaene/kaffee-verkostung").status_code, 404)
+
     def test_every_page_renders(self):
         admin, chips = self.add_chips()
-        for client, urls in ((admin, ("/", "/chips/admin", "/chips/admin/daten", "/chips/einkauf", "/cola/", "/wasser/")),
+        self.post(admin, "/plaene/neu", title="Kaffee")
+        self.post(admin, "/plaene/kaffee/abschnitt", title="Die Nase")
+        self.post(admin, "/plaene/kaffee/abschnitt/0/frage", label="Duft", type="scale")
+        self.post(admin, "/ideen", name="Gurken")
+        for client, urls in ((admin, ("/", "/chips/admin", "/chips/admin/daten", "/chips/einkauf", "/cola/", "/wasser/",
+                                      "/plaene/neu", "/plaene/kaffee", "/ideen")),
                              (self.client("a"), ("/", "/chips/", "/chips/einkauf", f"/chips/schale/{chips[0]['id']}",
-                                                 "/chips/enthuellung", "/chips/ergebnisse", "/cola/", "/wasser/"))):
+                                                 "/chips/enthuellung", "/chips/ergebnisse", "/cola/", "/wasser/",
+                                                 "/plaene/kaffee", "/ideen"))):
             for url in urls:
                 self.assertEqual(client.get(url).status_code, 200, url)
 

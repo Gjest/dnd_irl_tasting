@@ -1,0 +1,103 @@
+{% extends "master.html" %}
+{% block title %}{{ plan.title }} · Die Verkostungsgilde{% endblock %}
+{% block content %}
+{% set admin = user.role == 'admin' %}
+<p class="m-eyebrow"><a href="{{ url_for('core.landing') }}">Die Verkostungsgilde</a> · In Planung</p>
+<h1 class="m-title"><span aria-hidden="true">{{ plan.icon }}</span> {{ plan.title }}</h1>
+<p class="m-lead">{% if plan.tagline %}{{ plan.tagline }} · {% endif %}Kommt bald. {% if count %}{{ count }} Frage{{ '' if count == 1 else 'n' }} stehen schon fest.{% else %}Die Fragen fehlen noch.{% endif %}</p>
+
+{% for section in plan.sections %}
+{% set s = loop.index0 %}
+<section class="m-card m-plan-section" id="abschnitt-{{ s }}" aria-labelledby="abschnitt-{{ s }}-titel">
+  <div class="m-plan-head">
+    <h2 id="abschnitt-{{ s }}-titel">{{ section.title }}</h2>
+    {% if admin %}
+    <form method="post" action="{{ url_for('plans.delete_section', slug=plan.slug, index=s) }}" data-confirm="Abschnitt „{{ section.title }}“ mit allen Fragen entfernen?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="m-link m-danger" type="submit">Abschnitt entfernen</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if section.criteria %}
+  <ol class="m-questions">
+    {% for q in section.criteria %}
+    <li class="m-question">
+      <span class="m-question-label">{{ q.label }}</span>
+      <span class="m-question-kind">{{ types[q.type] }}</span>
+      {% if q.type == 'scale' %}
+      <span class="m-scale-preview">
+        <span>{{ q.low or plan.scale.min }}</span>
+        <span class="m-dots" aria-hidden="true">{% for n in range(plan.scale.min, plan.scale.max + 1) %}<span>{{ n }}</span>{% endfor %}</span>
+        <span>{{ q.high or plan.scale.max }}</span>
+      </span>
+      {% else %}
+      <span class="m-text-preview" aria-hidden="true"></span>
+      {% endif %}
+      {% if admin %}
+      <span class="m-actions">
+        {% if not loop.first %}
+        <form method="post" action="{{ url_for('plans.move_question', slug=plan.slug, index=s, number=loop.index0) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="m-link" type="submit">Nach oben</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('plans.delete_question', slug=plan.slug, index=s, number=loop.index0) }}" data-confirm="Frage „{{ q.label }}“ entfernen?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="m-link m-danger" type="submit">Entfernen</button>
+        </form>
+      </span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="m-hint">Noch keine Fragen in diesem Abschnitt.</p>
+  {% endif %}
+  {% if admin %}
+  <form method="post" action="{{ url_for('plans.add_question', slug=plan.slug, index=s) }}" class="m-inline-form m-two">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="m-field m-wide"><span>Neue Frage</span>
+      <input type="text" name="label" maxlength="{{ limits.label }}" required placeholder="z. B. Wie bitter ist es?"></label>
+    <label class="m-field m-wide"><span>Art</span>
+      <select name="type">{% for key, name in types.items() %}<option value="{{ key }}">{{ name }}{% if key == 'scale' %} ({{ plan.scale.min }}–{{ plan.scale.max }}){% endif %}</option>{% endfor %}</select></label>
+    <label class="m-field"><span>Skala links, bei {{ plan.scale.min }} (optional)</span>
+      <input type="text" name="low" maxlength="{{ limits.end }}" placeholder="z. B. gar nicht"></label>
+    <label class="m-field"><span>Skala rechts, bei {{ plan.scale.max }} (optional)</span>
+      <input type="text" name="high" maxlength="{{ limits.end }}" placeholder="z. B. sehr"></label>
+    <div class="m-wide"><button class="m-button m-button-quiet" type="submit">Frage hinzufügen</button></div>
+  </form>
+  {% endif %}
+</section>
+{% endfor %}
+
+{% if admin %}
+<form method="post" action="{{ url_for('plans.add_section', slug=plan.slug) }}" class="m-card m-inline-form m-plan-section">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="m-field"><span>Neuer Abschnitt</span>
+    <input type="text" name="title" maxlength="{{ limits.section }}" required placeholder="{{ 'z. B. Das Auge, Die Nase, Der Gaumen' if not plan.sections else 'z. B. Der Abgang' }}"></label>
+  <div><button class="m-button" type="submit">Abschnitt anlegen</button></div>
+</form>
+
+<details class="m-card m-admin">
+  <summary>Name und Kachel</summary>
+  <form method="post" action="{{ url_for('plans.update', slug=plan.slug) }}" class="m-inline-form m-two">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="m-field m-wide"><span>Name</span><input type="text" name="title" maxlength="{{ limits.title }}" required value="{{ plan.title }}"></label>
+    <label class="m-field"><span>Kurzname</span><input type="text" name="short" maxlength="{{ limits.short }}" value="{{ plan.short }}"></label>
+    <label class="m-field"><span>Symbol</span><input type="text" name="icon" maxlength="{{ limits.icon }}" value="{{ plan.icon }}"></label>
+    <label class="m-field m-wide"><span>Untertitel</span><input type="text" name="tagline" maxlength="{{ limits.tagline }}" value="{{ plan.tagline }}"></label>
+    <div class="m-wide"><button class="m-button" type="submit">Speichern</button></div>
+  </form>
+</details>
+
+<details class="m-card m-admin">
+  <summary>Vorlage</summary>
+  <p class="m-hint">Die Fragen als JSON-Datei (<code>tasting-template/1</code>). Sie lässt sich unter „Neues Tasting planen“ wieder einspielen, zum Beispiel für die nächste Runde. Wenn das Tasting gebaut wird, übernimmt es Abschnitte und Fragen von hier, im selben Aufbau wie die Ergebnisdateien.</p>
+  <p><a class="m-button m-button-quiet" href="{{ url_for('plans.download', slug=plan.slug) }}">Vorlage herunterladen</a></p>
+  <form method="post" action="{{ url_for('plans.delete', slug=plan.slug) }}" data-confirm="„{{ plan.title }}“ mit allen Fragen entfernen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="m-link m-danger" type="submit">Geplantes Tasting entfernen</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

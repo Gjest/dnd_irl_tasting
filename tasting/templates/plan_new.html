@@ -1,0 +1,28 @@
+{% extends "master.html" %}
+{% block title %}Neues Tasting planen · Die Verkostungsgilde{% endblock %}
+{% block content %}
+<p class="m-eyebrow"><a href="{{ url_for('core.landing') }}">Die Verkostungsgilde</a> · Admin</p>
+<h1 class="m-title">Neues Tasting planen</h1>
+<p class="m-lead">Erst ein Name, dann die Fragen. Bis das Tasting gebaut ist, steht es auf der Startseite als „Bald“.</p>
+
+<form method="post" action="{{ url_for('plans.create') }}" class="m-card m-inline-form m-two">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="m-field m-wide"><span>Name</span>
+    <input type="text" name="title" maxlength="{{ limits.title }}" required placeholder="z. B. Kaffee-Verkostung"></label>
+  <label class="m-field"><span>Kurzname für das Tafelbild (optional)</span>
+    <input type="text" name="short" maxlength="{{ limits.short }}" placeholder="z. B. Kaffee"></label>
+  <label class="m-field"><span>Symbol (optional)</span>
+    <input type="text" name="icon" maxlength="{{ limits.icon }}" placeholder="☕"></label>
+  <label class="m-field m-wide"><span>Untertitel (optional)</span>
+    <input type="text" name="tagline" maxlength="{{ limits.tagline }}" placeholder="z. B. Vom Discounter bis zur Rösterei"></label>
+  <div class="m-wide"><button class="m-button" type="submit">Anlegen</button></div>
+</form>
+
+<h2 class="m-section-title">Oder eine Vorlage einspielen</h2>
+<form method="post" action="{{ url_for('plans.upload') }}" enctype="multipart/form-data" class="m-card m-stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <p class="m-hint">Eine JSON-Datei, wie sie „Vorlage herunterladen“ bei einem geplanten Tasting erzeugt (Format <code>tasting-template/1</code>). Daraus entsteht ein neues geplantes Tasting mit allen Fragen.</p>
+  <label class="m-field"><span>Vorlage</span><input type="file" name="file" accept="application/json,.json" required></label>
+  <div><button class="m-button" type="submit">Einspielen</button></div>
+</form>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "master.html" %}
+{% block title %}Ideensammlung · Die Verkostungsgilde{% endblock %}
+{% block content %}
+<p class="m-eyebrow"><a href="{{ url_for('core.landing') }}">Die Verkostungsgilde</a> · Für alle</p>
+<h1 class="m-title">Ideensammlung</h1>
+<p class="m-lead">Was kosten wir als Nächstes? Trag ein, was dir einfällt, und gib jeder Idee Sterne. Oben steht, worauf die Gilde am meisten Lust hat.</p>
+
+<form method="post" action="{{ url_for('ideas.add') }}" class="m-card m-add-idea">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="m-field"><span>Neue Idee</span>
+    <input type="text" name="name" maxlength="{{ max_name }}" required placeholder="z. B. Saure Gurken, Energydrinks, Schokolade"></label>
+  <button class="m-button" type="submit">Eintragen</button>
+</form>
+
+{% if ideas %}
+<ol class="m-ideas">
+  {% for idea in ideas %}
+  {% set mine = idea.ratings.get(user.id) %}
+  <li class="m-idea" id="idee-{{ idea.id }}">
+    <span class="m-idea-rank" aria-hidden="true">{{ loop.index }}</span>
+    <span class="m-idea-name">{{ idea.name }}</span>
+    <span class="m-idea-meta">
+      {% if idea.votes %}★ {{ '%.1f'|format(idea.average)|replace('.', ',') }} aus {{ idea.votes }} Wertung{{ '' if idea.votes == 1 else 'en' }}{% else %}Noch keine Sterne{% endif %}
+      · von {{ idea.by_name }}
+    </span>
+    <form method="post" action="{{ url_for('ideas.rate', idea_id=idea.id) }}" class="m-stars" aria-label="Deine Sterne für {{ idea.name }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% for n in stars %}
+      <button class="m-star{% if mine and n <= mine %} is-on{% endif %}" type="submit" name="stars" value="{{ n }}"
+              aria-pressed="{{ 'true' if mine == n else 'false' }}" aria-label="{{ n }} Stern{{ '' if n == 1 else 'e' }}">★</button>
+      {% endfor %}
+      <span class="m-hint">{% if mine %}Deine Wertung: {{ mine }}. Nochmal tippen nimmt sie zurück.{% else %}Noch nicht bewertet{% endif %}</span>
+    </form>
+    {% if idea.by == user.id or user.role == 'admin' %}
+    <form method="post" action="{{ url_for('ideas.delete', idea_id=idea.id) }}" data-confirm="„{{ idea.name }}“ von der Liste nehmen?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="m-link m-danger" type="submit">Entfernen</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="m-hint">Noch keine Ideen. Mach den Anfang.</p>
+{% endif %}
+{% endblock %}

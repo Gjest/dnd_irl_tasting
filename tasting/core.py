@@ -18,7 +18,7 @@ from flask import (
     url_for,
 )
 
-from . import images, results, security, views
+from . import ideas, images, plans, results, security, views
 from .registry import TASTINGS
 from .web import admin_required, german_date, login_required, start_document, store, tasting_date, wants_json
 
@@ -83,7 +83,7 @@ def landing():
         tiles.append({**tasting, **info, "href": href})
     view = request.cookies.get(VIEW_COOKIE)
     return render_template("landing.html", tiles=tiles, start=start_document().read(),
-                           view=view if view in VIEWS else "tafel")
+                           view=view if view in VIEWS else "tafel", plans=plans.tiles(), ideas=ideas.tile())
 
 
 # The start page shows either the table picture or the tiles. The choice is

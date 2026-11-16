@@ -56,6 +56,41 @@
   {% endfor %}
 </nav>
 
+<section aria-labelledby="next-title">
+  <h2 id="next-title" class="m-section-title">Was als Nächstes?</h2>
+  <nav class="tiles-grid" aria-label="Geplante Verkostungen und Ideen">
+    {% for plan in plans %}
+    <a class="app-tile app-tile-plan" href="{{ plan.href }}">
+      <span class="app-tile-top">
+        <span class="app-tile-icon" aria-hidden="true">{{ plan.icon }}</span>
+        <span class="app-tile-status">Bald</span>
+      </span>
+      <span class="app-tile-number">In Planung</span>
+      <span class="app-tile-title">{{ plan.title }}</span>
+      {% if plan.tagline %}<span class="app-tile-tagline">{{ plan.tagline }}</span>{% endif %}
+      <span class="app-tile-facts">{{ plan.facts|join(' · ') }}</span>
+    </a>
+    {% endfor %}
+    <a class="app-tile app-tile-ideas" href="{{ url_for('ideas.page') }}">
+      <span class="app-tile-top">
+        <span class="app-tile-icon" aria-hidden="true">📜</span>
+        <span class="app-tile-status">{{ ideas.count }} Idee{{ '' if ideas.count == 1 else 'n' }}</span>
+      </span>
+      <span class="app-tile-number">Für alle</span>
+      <span class="app-tile-title">Ideensammlung</span>
+      <span class="app-tile-tagline">Was kosten wir als Nächstes? Trag ein und vergib Sterne.</span>
+      {% if ideas.top %}<span class="app-tile-winner">★ {{ ideas.top }}</span>{% endif %}
+    </a>
+    {% if user.role == 'admin' %}
+    <a class="app-tile app-tile-add" href="{{ url_for('plans.new') }}">
+      <span class="app-tile-plus" aria-hidden="true">+</span>
+      <span class="app-tile-title">Neues Tasting planen</span>
+      <span class="app-tile-tagline">Name und erste Fragen, oder eine Vorlage einspielen</span>
+    </a>
+    {% endif %}
+  </nav>
+</section>
+
 {% if start.photos %}
 <section class="m-gallery" aria-labelledby="gallery-title">
   <h2 id="gallery-title" class="m-section-title">Aus dem Gildenbuch</h2>
