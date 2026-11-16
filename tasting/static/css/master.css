@@ -146,6 +146,28 @@ code { padding: .1em .35em; border-radius: 4px; background: rgba(0, 0, 0, .25); 
 .app-tile-cola { --tile-a: #b8262c; --tile-b: #3d0a0e; }
 .app-tile-wasser { --tile-a: #2c7fb4; --tile-b: #0b2f50; }
 
+/* Switch between the table picture and the tiles. */
+.m-view-switch {
+  display: inline-flex; margin: 0 0 1.2rem; padding: 4px;
+  background: rgba(0, 0, 0, .35); border: 1px solid rgba(226, 182, 92, .45); border-radius: 999px;
+}
+.m-view-switch button {
+  min-height: 40px; padding: .4rem 1.1rem;
+  font: 700 .95rem Cinzel, Georgia, serif; letter-spacing: .03em; color: var(--muted);
+  background: none; border: 0; border-radius: 999px; cursor: pointer;
+}
+.m-view-switch button[aria-pressed="true"] { color: #2a1608; background: linear-gradient(180deg, #f3cf7f, var(--brass) 60%, #b98a3a); }
+.m-view-switch button:focus-visible { outline: 2px solid var(--candle); outline-offset: 2px; }
+
+.m-table-links { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; margin-top: .8rem; }
+.m-table-link {
+  display: inline-flex; align-items: center; gap: .35rem; min-height: 40px; padding: .35rem .9rem;
+  color: var(--text); text-decoration: none; font-weight: 700;
+  background: rgba(0, 0, 0, .35); border: 1px solid rgba(226, 182, 92, .4); border-radius: 999px;
+}
+.m-table-link:hover, .m-table-link:focus-visible { border-color: var(--brass); background: rgba(226, 182, 92, .15); }
+.m-table-link b { padding: .05rem .5rem; font-size: .72rem; color: #2a1608; background: var(--brass); border-radius: 999px; }
+
 /* The table picture: the guild at the table, the tastings as dishes on it. */
 .m-table { margin: 0 0 2rem; }
 .m-table-frame {

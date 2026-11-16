@@ -88,7 +88,7 @@ A finished tasting is one JSON file that brings its own questions along. The res
 3. **Look:** add `static/css/theme-kaffee.css`. It sets the color variables of `style.css` (`--ash`, `--soot`, `--ember`, `--bone`, …) and the chart variables (`--series-1`, `--chart-text`, …) on `.theme-kaffee`, and can restyle headings. `theme-cola.css` and `theme-wasser.css` are short examples.
 4. **Tile color:** add `.app-tile-kaffee { --tile-a: …; --tile-b: …; }` to `master.css`.
 5. **Upload:** deploy, open the new tile as admin and upload the file. The app writes `data/kaffee.json`.
-6. **Table picture:** if the start page has one, mark the new tasting's dish under "Tafelbild". `short` is the label shown on the picture.
+6. **Table picture:** if the start page has one, mark the new tasting's dish under "Tafelbild". `short` is the label shown on the picture. Until then the tasting is still reachable through the links below the picture and in the tile view.
 
 No new Python code is needed. Routes, upload, download, backups and the results page come from `results.py`.
 

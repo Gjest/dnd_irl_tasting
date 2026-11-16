@@ -13,7 +13,12 @@
 {% set table = start.get('table') %}
 {% if table %}
 {% set height = 100 * table.aspect %}
-<figure class="m-table">
+<form method="post" action="{{ url_for('core.set_view') }}" class="m-view-switch" id="view-switch" aria-label="Ansicht">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" name="view" value="tafel" aria-pressed="{{ 'true' if view == 'tafel' else 'false' }}" aria-controls="view-tafel">🍽️ Tafel</button>
+  <button type="submit" name="view" value="kacheln" aria-pressed="{{ 'true' if view == 'kacheln' else 'false' }}" aria-controls="view-kacheln">▦ Kacheln</button>
+</form>
+<figure class="m-table" id="view-tafel" {% if view != 'tafel' %}hidden{% endif %}>
   <div class="m-table-frame">
   <img src="{{ url_for('core.photo', name=table.image) }}" alt="Die Gilde an der Tafel, auf dem Tisch die Verkostungen">
   <svg class="m-table-spots" viewBox="0 0 100 {{ height }}" aria-label="Verkostungen auf dem Tisch">
@@ -27,10 +32,16 @@
     {% endfor %}
   </svg>
   </div>
-  <figcaption class="m-hint">Tippe auf eine Speise auf dem Tisch, oder wähle unten eine Verkostung.</figcaption>
+  <figcaption class="m-hint">Tippe auf eine Speise auf dem Tisch.</figcaption>
+  {# Every tasting stays one tap away, also one without a dish on the table. #}
+  <nav class="m-table-links" aria-label="Verkostungen">
+    {% for tile in tiles %}
+    <a href="{{ tile.href }}" class="m-table-link{% if tile.live %} is-live{% endif %}"><span aria-hidden="true">{{ tile.icon }}</span> {{ tile.short or tile.title }}{% if tile.live %} <b>{{ tile.status }}</b>{% endif %}</a>
+    {% endfor %}
+  </nav>
 </figure>
 {% endif %}
-<nav class="tiles-grid" aria-label="Verkostungen">
+<nav class="tiles-grid" id="view-kacheln" aria-label="Verkostungen" {% if table and view != 'kacheln' %}hidden{% endif %}>
   {% for tile in tiles %}
   <a class="app-tile app-tile-{{ tile.slug }}{% if tile.live %} app-tile-live{% endif %}" href="{{ tile.href }}">
     <span class="app-tile-top">
@@ -152,4 +163,4 @@
 </details>
 {% endif %}
 {% endblock %}
-{% block scripts %}{% if user.role == 'admin' and start.get('table') %}<script src="{{ url_for('static', filename='js/table.js') }}"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if start.get('table') %}<script src="{{ url_for('static', filename='js/view.js') }}"></script>{% if user.role == 'admin' %}<script src="{{ url_for('static', filename='js/table.js') }}"></script>{% endif %}{% endif %}{% endblock %}

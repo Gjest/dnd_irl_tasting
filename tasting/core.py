@@ -81,7 +81,29 @@ def landing():
             href = url_for("results.page", slug=tasting["slug"])
         info["date"] = tasting_date(tasting["slug"], info.get("date"))
         tiles.append({**tasting, **info, "href": href})
-    return render_template("landing.html", tiles=tiles, start=start_document().read())
+    view = request.cookies.get(VIEW_COOKIE)
+    return render_template("landing.html", tiles=tiles, start=start_document().read(),
+                           view=view if view in VIEWS else "tafel")
+
+
+# The start page shows either the table picture or the tiles. The choice is
+# per device, in a small cookie of its own, so it survives logging out.
+VIEW_COOKIE = "ansicht"
+VIEWS = ("tafel", "kacheln")
+
+
+@bp.post("/start/ansicht")
+@login_required
+def set_view():
+    view = request.form.get("view")
+    if view not in VIEWS:
+        abort(400)
+    # The page script switches at once and only saves; a plain form goes back to the page.
+    response = ("", 204) if request.headers.get("X-CSRF-Token") else redirect(url_for("core.landing"))
+    response = current_app.make_response(response)
+    response.set_cookie(VIEW_COOKIE, view, max_age=365 * 24 * 3600, httponly=True, samesite="Lax",
+                        secure=current_app.config.get("SESSION_COOKIE_SECURE", False))
+    return response
 
 
 @bp.app_template_filter("german_date")

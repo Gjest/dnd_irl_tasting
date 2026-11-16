@@ -896,6 +896,34 @@ class Tastings(Base):
         self.assertEqual(player.get(f"/fotos/{table['image']}").status_code, 200)
         self.assertEqual(self.client().get(f"/fotos/{table['image']}").status_code, 302)
 
+    def test_switch_between_table_and_tiles(self):
+        admin, player = self.client("admin"), self.client("a")
+        page = player.get("/").get_data(as_text=True)
+        self.assertNotIn("view-switch", page)  # without a picture there is nothing to switch
+        self.assertNotIn('id="view-kacheln" aria-label="Verkostungen" hidden', page)
+        self.table(admin)
+        page = player.get("/").get_data(as_text=True)
+        # The table comes first; the tiles wait, and every tasting is still linked below the picture.
+        self.assertIn('id="view-tafel" >', page)
+        self.assertIn('id="view-kacheln" aria-label="Verkostungen" hidden', page)
+        for href in ("/chips/", "/cola/", "/wasser/"):
+            self.assertIn(f'href="{href}" class="m-table-link', page)
+        response = self.post(player, "/start/ansicht", view="kacheln")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("ansicht=kacheln", response.headers["Set-Cookie"])
+        self.assertIn("HttpOnly", response.headers["Set-Cookie"])
+        page = player.get("/").get_data(as_text=True)
+        self.assertIn('id="view-tafel" hidden', page)
+        self.assertIn('id="view-kacheln" aria-label="Verkostungen" >', page)
+        self.assertIn('value="kacheln" aria-pressed="true"', page)
+        # The page script saves in the background and gets no redirect.
+        response = player.post("/start/ansicht", data={"view": "tafel"}, headers={"X-CSRF-Token": self.token(player)})
+        self.assertEqual(response.status_code, 204)
+        self.assertIn('id="view-tafel" >', player.get("/").get_data(as_text=True))
+        self.assertEqual(self.post(player, "/start/ansicht", view="<script>").status_code, 400)
+        self.assertEqual(player.post("/start/ansicht", data={"view": "tafel"}).status_code, 403)  # no CSRF token
+        self.assertNotIn("ansicht=", player.post("/start/ansicht", data={"view": "tafel"}).headers.get("Set-Cookie", ""))
+
     def test_bad_spots_change_nothing(self):
         admin = self.client("admin")
         self.table(admin)
