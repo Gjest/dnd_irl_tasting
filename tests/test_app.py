@@ -891,6 +891,10 @@ class Tastings(Base):
         self.assertIn('viewBox="0 0 100 50.0"', page)
         self.assertIn('<a href="/chips/" class="m-spot">', page)
         self.assertIn('cx="25.0" cy="30.0" r="8.0"', page)
+        # The dish itself is the button: no label drawn over the picture, only the link title.
+        spots = page[page.index('class="m-table-spots"'):page.index("</svg>")]
+        self.assertNotIn("<text", spots)
+        self.assertIn("<title>Blutkrieg der Chips</title>", spots)
         self.assertNotIn('<a href="/cola/" class="m-spot">', page)
         self.assertNotIn("spot-editor", page)
         self.assertEqual(player.get(f"/fotos/{table['image']}").status_code, 200)

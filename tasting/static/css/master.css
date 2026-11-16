@@ -178,14 +178,13 @@ code { padding: .1em .35em; border-radius: 4px; background: rgba(0, 0, 0, .25); 
 .m-table-frame img { display: block; width: 100%; height: auto; }
 .m-table-spots { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .m-table figcaption { margin-top: .6rem; text-align: center; }
-.m-spot circle { fill: rgba(255, 179, 92, .12); stroke: var(--brass); stroke-width: .35; animation: m-glow 2.6s ease-in-out infinite; }
-.m-spot text {
-  fill: #fff4dc; font: 700 3.4px Cinzel, Georgia, serif; letter-spacing: .05px;
-  paint-order: stroke; stroke: rgba(26, 17, 11, .85); stroke-width: .5px;
-}
-.m-spot:hover circle, .m-spot:focus-visible circle { fill: rgba(255, 179, 92, .3); stroke-width: .6; }
+/* The dishes in the picture are the buttons: nothing drawn on top of them,
+   only a soft glow under the pointer and a ring for keyboard focus. */
+.m-spot { cursor: pointer; }
+.m-spot circle { fill: transparent; stroke: none; pointer-events: all; transition: fill .2s ease; }
+.m-spot:hover circle { fill: rgba(255, 200, 120, .16); }
 .m-spot:focus-visible { outline: none; }
-@keyframes m-glow { 0%, 100% { stroke-opacity: .55; } 50% { stroke-opacity: 1; } }
+.m-spot:focus-visible circle { fill: rgba(255, 200, 120, .16); stroke: var(--candle); stroke-width: .5; }
 
 .m-spot-editor { margin-top: 1.4rem; }
 .m-table-edit { margin: .4rem 0; cursor: crosshair; }
@@ -234,7 +233,7 @@ code { padding: .1em .35em; border-radius: 4px; background: rgba(0, 0, 0, .25); 
 [hidden] { display: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  .m-spot circle { animation: none; }
+  .m-spot circle { transition: none; }
   .app-tile { transition: none; }
   .app-tile:hover, .app-tile:focus-visible { transform: none; }
 }

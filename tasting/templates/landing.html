@@ -27,7 +27,6 @@
     <a href="{{ tile.href }}" class="m-spot">
       <title>{{ tile.title }}</title>
       <circle cx="{{ spot.x }}" cy="{{ spot.y * table.aspect }}" r="{{ spot.r }}"></circle>
-      <text x="{{ spot.x }}" y="{{ spot.y * table.aspect + spot.r + 4 }}" text-anchor="middle">{{ tile.short or tile.title }}</text>
     </a>
     {% endfor %}
   </svg>
