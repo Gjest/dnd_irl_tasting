@@ -1,0 +1,26 @@
+{% from "_photo_field.html" import photo_picker %}
+{% macro item_fields(item, csrf_token, units, max_field, max_note, slug) %}
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label class="field"><span>Name</span>
+    <input type="text" name="name" maxlength="{{ max_field }}" required value="{{ item.name if item else '' }}" placeholder="z. B. Cola Zero, Gouda alt, Espresso"></label>
+  <label class="field"><span>Marke oder Hersteller (optional)</span>
+    <input type="text" name="brand" maxlength="{{ max_field }}" value="{{ item.brand if item else '' }}" placeholder="z. B. Discounter-Eigenmarke"></label>
+  <label class="field"><span>Sorte oder Notiz (optional)</span>
+    <input type="text" name="note" maxlength="{{ max_note }}" value="{{ item.note if item else '' }}" placeholder="z. B. mit Vanille, 48 Monate gereift"></label>
+  <label class="field"><span>Preis in € (optional)</span>
+    <input type="text" name="price" inputmode="decimal" maxlength="8" value="{{ ('%.2f'|format(item.price)|replace('.', ',')) if item and item.price is not none else '' }}" placeholder="1,99"></label>
+  <div class="field-pair">
+    <label class="field"><span>Menge (optional)</span>
+      <input type="text" name="amount" inputmode="decimal" maxlength="7" value="{{ '%g'|format(item.amount) if item and item.amount else '' }}" placeholder="500"></label>
+    <label class="field"><span>Einheit</span>
+      <select name="unit">{% for unit in units %}<option {% if item and item.unit == unit %}selected{% endif %}>{{ unit }}</option>{% endfor %}</select></label>
+  </div>
+  <p class="hint">Mit Preis und Menge vergleichen die Ergebnisse fair pro 100 g oder 100 ml.</p>
+  {{ photo_picker('Foto (optional)') }}
+  {% if item and item.image %}
+  <div class="photo-current">
+    <img class="thumb" src="{{ url_for('live.photo', slug=slug, name=item.image) }}" alt="Aktuelles Foto" width="72" height="72">
+    <label class="check"><input type="checkbox" name="remove_image"> Foto entfernen</label>
+  </div>
+  {% endif %}
+{% endmacro %}

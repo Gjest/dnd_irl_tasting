@@ -145,6 +145,9 @@ def compute(archive):
             "spread": pstdev(values) if len(values) >= 2 else None,
             "averages": averages(rows),
             "by_person": {r["person"]: r["scores"][rank_key] for r in rows},
+            # Optional: what 100 g or 100 ml cost, for tastings that recorded prices.
+            "price_per_100": items[item_id].get("price_per_100"),
+            "unit": items[item_id].get("unit", "g"),
         })
     item_rows.sort(key=lambda row: (-row["value"], -(row["averages"].get(tie_key) or 0) if tie_key else 0, row["name"]))
     for position, row in enumerate(item_rows, start=1):
@@ -223,6 +226,15 @@ def compute(archive):
                            "winner": " & ".join(w["name"] for w in winners),
                            "stat": f"Ø {de(top)} / {scale['max']}"})
     rank_label = next(c["label"] for c in criteria if c["key"] == rank_key)
+    priced = [r for r in item_rows if isinstance(r["price_per_100"], (int, float)) and r["price_per_100"] > 0]
+    if len(priced) >= 2:
+        # Most of the ranking score per euro: a good one that costs little.
+        winners, _ = _winners(priced, lambda r: r["value"] / r["price_per_100"], max)
+        if winners:
+            top = winners[0]
+            awards.append({"title": "Das Schnäppchen", "line": "Viel Genuss für wenig Gold.", "kind": "item",
+                           "winner": " & ".join(w["name"] for w in winners),
+                           "stat": f"Ø {de(top['value'])} für {de(top['price_per_100'])} €/100 {top['unit']}"})
     if len(item_rows) >= 2:
         winners, top = _winners([r for r in item_rows if r["spread"] is not None], lambda r: r["spread"], max)
         if winners:

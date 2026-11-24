@@ -42,12 +42,12 @@
 {% endif %}
 <nav class="tiles-grid" id="view-kacheln" aria-label="Verkostungen" {% if table and view != 'kacheln' %}hidden{% endif %}>
   {% for tile in tiles %}
-  <a class="app-tile app-tile-{{ tile.slug }}{% if tile.live %} app-tile-live{% endif %}" href="{{ tile.href }}">
+  <a class="app-tile app-tile-{{ tile.slug }}{% if tile.kind == 'custom' %} app-tile-custom{% endif %}{% if tile.live %} app-tile-live{% endif %}" href="{{ tile.href }}">
     <span class="app-tile-top">
       <span class="app-tile-icon" aria-hidden="true">{{ tile.icon }}</span>
       <span class="app-tile-status">{{ tile.status }}</span>
     </span>
-    <span class="app-tile-number">Verkostung {{ tile.number }}{% if tile.date %} · <time datetime="{{ tile.date }}">{{ tile.date|german_date }}</time>{% endif %}</span>
+    <span class="app-tile-number">{% if tile.number %}Verkostung {{ tile.number }}{% else %}Eigenes Tasting{% endif %}{% if tile.date %} · <time datetime="{{ tile.date }}">{{ tile.date|german_date }}</time>{% endif %}</span>
     <span class="app-tile-title">{{ tile.title }}</span>
     <span class="app-tile-tagline">{{ tile.tagline }}</span>
     <span class="app-tile-facts">{{ tile.facts|join(' · ') }}</span>

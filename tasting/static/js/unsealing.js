@@ -21,9 +21,10 @@ function card(chip, isNew) {
     name.append(photo);
   }
   name.append(el("span", "reveal-name", chip.label));
-  name.append(el("span", "reveal-meta", `Schale ${chip.bowl} · ${chip.flavor_type}`));
+  // Chips sends flavor and DC; other tastings send their own line and score.
+  name.append(el("span", "reveal-meta", chip.meta ?? `Schale ${chip.bowl} · ${chip.flavor_type}`));
   item.append(name);
-  item.append(el("span", "reveal-score", `DC ${fmt(chip.dc)}`));
+  item.append(el("span", "reveal-score", chip.score ?? `DC ${fmt(chip.dc)}`));
   return item;
 }
 
@@ -37,7 +38,7 @@ function render(data) {
   if (nextButton) {
     nextButton.hidden = finished;
     const remaining = data.total - data.reveal_count;
-    nextButton.textContent = remaining === 1 ? "Den Sieger enthüllen" : "Nächste Schale enthüllen";
+    nextButton.textContent = remaining === 1 ? "Den Sieger enthüllen" : (root.dataset.nextLabel || "Nächste Schale enthüllen");
   }
   doneLink.hidden = !finished;
   if (data.reveal_count === shown) return;

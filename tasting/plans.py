@@ -39,7 +39,7 @@ TYPES = {"scale": "Skala", "text": "Freitext"}
 MAX_PLANS = 30
 MAX_SECTIONS = 15
 MAX_QUESTIONS = 80
-LIMITS = {"title": 80, "short": 24, "icon": 8, "tagline": 140, "section": 80, "label": 140, "end": 60}
+LIMITS = {"title": 80, "short": 24, "icon": 8, "tagline": 140, "section": 80, "label": 140, "end": 60, "vessel": 24}
 SLUG_PATTERN = re.compile(r"[a-z0-9][a-z0-9-]{0,40}")
 # Addresses that already mean something, so a plan can never shadow them.
 RESERVED = {t["slug"] for t in TASTINGS} | {
@@ -120,22 +120,59 @@ def clean(template, slug):
             criteria.append(entry)
         sections.append({"title": _text(section.get("title"), LIMITS["section"]) or "Ohne Titel", "criteria": criteria})
     scale = template.get("scale", {"min": 1, "max": 5})
-    return {
+    sections = _keyed(sections)
+    plan = {
         "slug": slug,
         "title": _text(template["title"], LIMITS["title"]),
         "short": _text(template.get("short"), LIMITS["short"]),
         "icon": _text(template.get("icon"), LIMITS["icon"]) or "✨",
         "tagline": _text(template.get("tagline"), LIMITS["tagline"]),
         "scale": {"min": scale["min"], "max": scale["max"]},
-        "sections": _keyed(sections),
+        "sections": sections,
         "created": date.today().isoformat(),
         # Who takes part, set in /verwaltung. Not part of the template: a template is only the questions.
         "participants": [],
+        "state": "planned",
+        "vessel": clean_vessel(template.get("vessel")),
+        "ranking": "",
     }
+    plan["ranking"] = ranking_key({**plan, "ranking": template.get("ranking", "")}) or ""
+    return plan
+
+
+DEFAULT_VESSEL = {"one": "Schale", "many": "Schalen"}
+
+
+def clean_vessel(vessel):
+    """What the tasting is served in, e.g. Glas/Gläser. Falls back to Schale/Schalen."""
+    vessel = vessel if isinstance(vessel, dict) else {}
+    one = _text(vessel.get("one"), LIMITS["vessel"])
+    many = _text(vessel.get("many"), LIMITS["vessel"])
+    return {"one": one, "many": many or one} if one else dict(DEFAULT_VESSEL)
+
+
+def vessel(plan):
+    return clean_vessel(plan.get("vessel"))
+
+
+def state(plan):
+    """"planned" until the admin starts it, then "live". Plans from before this field are planned."""
+    return plan.get("state", "planned")
+
+
+def scale_questions(plan):
+    return [c for section in plan["sections"] for c in section["criteria"] if c.get("type", "scale") == "scale"]
+
+
+def ranking_key(plan):
+    """The scale question the ranking uses: the chosen one, else the first."""
+    keys = [c["key"] for c in scale_questions(plan)]
+    return plan.get("ranking") if plan.get("ranking") in keys else (keys[0] if keys else None)
 
 
 def export(plan):
-    return {"format": FORMAT, **{k: plan[k] for k in ("title", "short", "icon", "tagline", "scale", "sections")}}
+    return {"format": FORMAT, **{k: plan[k] for k in ("title", "short", "icon", "tagline", "scale", "sections")},
+            "vessel": vessel(plan), "ranking": ranking_key(plan) or ""}
 
 
 def question_count(plan):
@@ -146,6 +183,8 @@ def tiles():
     """What the start page shows for each plan."""
     shown = []
     for plan in document().read()["plans"]:
+        if state(plan) != "planned":
+            continue  # a running tasting has its own tile among the tastings (live.tiles)
         questions = question_count(plan)
         shown.append({**plan, "href": url_for("plans.page", slug=plan["slug"]),
                       "facts": [f"{questions} Frage{'' if questions == 1 else 'n'}" if questions else "Noch keine Fragen",
@@ -182,6 +221,14 @@ def _edit(slug):
 
 def _back(slug, anchor=""):
     return redirect(url_for("plans.page", slug=slug) + anchor)
+
+
+def _started(slug):
+    """Once a tasting runs, its questions are frozen: ratings are keyed by them."""
+    if state(_plan_or_404(slug)) != "planned":
+        flash("Das Tasting läuft schon. Die Fragen stehen fest.")
+        return redirect(url_for("live.home", slug=slug))
+    return None
 
 
 @bp.get("/plaene/neu")
@@ -230,9 +277,12 @@ def upload():
 @login_required
 def page(slug):
     plan = _plan_or_404(slug)
+    if state(plan) != "planned":
+        return redirect(url_for("live.home", slug=slug))
     users = store().users()
     people = [users[uid]["name"] for uid in plan.get("participants", []) if uid in users]
-    return render_template("plan.html", plan=plan, types=TYPES, limits=LIMITS, count=question_count(plan), people=people)
+    return render_template("plan.html", plan=plan, types=TYPES, limits=LIMITS, count=question_count(plan), people=people,
+                           vessel=vessel(plan), ranking=ranking_key(plan), scale_questions=scale_questions(plan))
 
 
 @bp.get("/plaene/<slug>/vorlage.json")
@@ -255,6 +305,10 @@ def update(slug):
         plan["short"] = _text(request.form.get("short"), LIMITS["short"])
         plan["icon"] = _text(request.form.get("icon"), LIMITS["icon"]) or "✨"
         plan["tagline"] = _text(request.form.get("tagline"), LIMITS["tagline"])
+        if "vessel_one" in request.form:
+            plan["vessel"] = clean_vessel({"one": request.form.get("vessel_one"), "many": request.form.get("vessel_many")})
+        if "ranking" in request.form and state(plan) == "planned":
+            plan["ranking"] = ranking_key({**plan, "ranking": request.form.get("ranking")}) or ""
     flash("Gespeichert.")
     return _back(slug)
 
@@ -262,6 +316,8 @@ def update(slug):
 @bp.post("/plaene/<slug>/abschnitt")
 @admin_required
 def add_section(slug):
+    if refused := _started(slug):
+        return refused
     title = _text(request.form.get("title"), LIMITS["section"])
     if not title:
         flash("Der Abschnitt braucht einen Titel.")
@@ -278,6 +334,8 @@ def add_section(slug):
 @bp.post("/plaene/<slug>/abschnitt/<int:index>/loeschen")
 @admin_required
 def delete_section(slug, index):
+    if refused := _started(slug):
+        return refused
     with _edit(slug) as plan:
         if not 0 <= index < len(plan["sections"]):
             abort(404)
@@ -290,6 +348,8 @@ def delete_section(slug, index):
 @bp.post("/plaene/<slug>/abschnitt/<int:index>/frage")
 @admin_required
 def add_question(slug, index):
+    if refused := _started(slug):
+        return refused
     label = _text(request.form.get("label"), LIMITS["label"])
     kind = request.form.get("type", "scale")
     if not label or kind not in TYPES:
@@ -319,6 +379,8 @@ def _question(plan, index, number):
 @bp.post("/plaene/<slug>/abschnitt/<int:index>/frage/<int:number>/hoch")
 @admin_required
 def move_question(slug, index, number):
+    if refused := _started(slug):
+        return refused
     with _edit(slug) as plan:
         criteria = _question(plan, index, number)
         if number > 0:
@@ -329,16 +391,39 @@ def move_question(slug, index, number):
 @bp.post("/plaene/<slug>/abschnitt/<int:index>/frage/<int:number>/loeschen")
 @admin_required
 def delete_question(slug, index, number):
+    if refused := _started(slug):
+        return refused
     with _edit(slug) as plan:
         _question(plan, index, number).pop(number)
         _keyed(plan["sections"])
     return _back(slug, f"#abschnitt-{index}")
 
 
+@bp.post("/plaene/<slug>/starten")
+@admin_required
+def start(slug):
+    """Turns the plan into a running tasting with its own pages under /live/<slug>/."""
+    from . import live
+
+    plan = _plan_or_404(slug)
+    if state(plan) != "planned":
+        return redirect(url_for("live.home", slug=slug))
+    if not scale_questions(plan):
+        flash("Ohne Skalenfrage gibt es keine Rangliste. Leg erst mindestens eine an.")
+        return _back(slug)
+    live.create(plan)
+    with _edit(slug) as entry:
+        entry["state"] = "live"
+        entry["ranking"] = ranking_key(entry)
+    flash(f"„{plan['title']}“ läuft. Jetzt einkaufen und {vessel(plan)['many']} aufstellen.")
+    return redirect(url_for("live.home", slug=slug))
+
+
 @bp.post("/plaene/<slug>/loeschen")
 @admin_required
 def delete(slug):
-    _plan_or_404(slug)
+    if state(_plan_or_404(slug)) != "planned":
+        return redirect(url_for("live.admin", slug=slug))  # a running tasting is removed there, with its data
     document().snapshot()
     with document().edit() as data:
         data["plans"] = [plan for plan in data["plans"] if plan["slug"] != slug]

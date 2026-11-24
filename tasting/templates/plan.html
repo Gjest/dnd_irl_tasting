@@ -79,6 +79,20 @@
   <div><button class="m-button" type="submit">Abschnitt anlegen</button></div>
 </form>
 
+<section class="m-card m-admin m-start">
+  <h2 class="m-panel-title">Tasting starten</h2>
+  {% if scale_questions %}
+  <p class="m-hint">Danach gibt es Einkaufsliste, {{ vessel.many }}, Bewerten und Enthüllung. Die Fragen stehen dann fest, Name, Kachel und Teilnehmer lassen sich weiter ändern.
+    Die Rangliste entscheidet „{{ (scale_questions|selectattr('key', 'equalto', ranking)|first).label }}“.</p>
+  <form method="post" action="{{ url_for('plans.start', slug=plan.slug) }}" data-confirm="„{{ plan.title }}“ jetzt starten? Die Fragen lassen sich danach nicht mehr ändern.">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="m-button" type="submit">Jetzt starten</button>
+  </form>
+  {% else %}
+  <p class="m-hint">Zum Starten braucht es mindestens eine Skalenfrage, sie entscheidet die Rangliste.</p>
+  {% endif %}
+</section>
+
 <details class="m-card m-admin">
   <summary>Name und Kachel</summary>
   <form method="post" action="{{ url_for('plans.update', slug=plan.slug) }}" class="m-inline-form m-two">
@@ -87,6 +101,12 @@
     <label class="m-field"><span>Kurzname</span><input type="text" name="short" maxlength="{{ limits.short }}" value="{{ plan.short }}"></label>
     <label class="m-field"><span>Symbol</span><input type="text" name="icon" maxlength="{{ limits.icon }}" value="{{ plan.icon }}"></label>
     <label class="m-field m-wide"><span>Untertitel</span><input type="text" name="tagline" maxlength="{{ limits.tagline }}" value="{{ plan.tagline }}"></label>
+    <label class="m-field"><span>Worin wird probiert? (Einzahl)</span><input type="text" name="vessel_one" maxlength="{{ limits.vessel }}" value="{{ vessel.one }}" placeholder="Schale, Glas, Becher …"></label>
+    <label class="m-field"><span>Mehrzahl</span><input type="text" name="vessel_many" maxlength="{{ limits.vessel }}" value="{{ vessel.many }}" placeholder="Schalen, Gläser, Becher …"></label>
+    {% if scale_questions %}
+    <label class="m-field m-wide"><span>Welche Frage entscheidet die Rangliste?</span>
+      <select name="ranking">{% for q in scale_questions %}<option value="{{ q.key }}" {% if q.key == ranking %}selected{% endif %}>{{ q.label }}</option>{% endfor %}</select></label>
+    {% endif %}
     <div class="m-wide"><button class="m-button" type="submit">Speichern</button></div>
   </form>
 </details>

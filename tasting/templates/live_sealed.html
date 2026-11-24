@@ -1,0 +1,10 @@
+{% extends "live_base.html" %}
+{% block title %}Versiegelt{% endblock %}
+{% block content %}
+<section class="center-note">
+  <p class="eyebrow">Versiegelt</p>
+  <h1>Noch nicht</h1>
+  <p class="lead">Die Ergebnisse bleiben verborgen, bis die Enthüllung vorbei ist.</p>
+  <a class="button" href="{{ url_for('live.home', slug=plan.slug) }}">Zurück</a>
+</section>
+{% endblock %}

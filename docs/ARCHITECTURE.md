@@ -18,6 +18,7 @@ The group has tasted cola (Google Forms), water (a Spring app) and chips (this a
 /cola/  /wasser/  finished tastings, each in its own look         results.py, results_page.html, theme-<slug>.css
 /plaene/…         planned tastings: name and questions, "Bald"    plans.py, plan.html, plan_new.html
 /ideen            the idea list with stars                        ideas.py, ideas.html
+/live/<name>/…    tastings started from a plan, guild look        live.py, live_*.html, theme-gilde.css
 /verwaltung       admin panel: logins, participants, hidden tastings  admin_panel.py, verwaltung.html; accounts.py
 ```
 
@@ -98,17 +99,19 @@ No new Python code is needed. Routes, upload, download, backups and the results 
 
 ### From a planned tasting
 
-A planned tasting (`plans.py`, `data/plans.json`) is the skeleton: name, icon, tagline and questions, nothing else. Its template uses the same `sections` and `criteria` as a results file, plus `"type": "scale"` or `"text"` per question:
+No code is needed. A plan (`plans.py`, `data/plans.json`) holds name, look, questions, participants, the container word (`vessel`, e.g. `{"one": "Glas", "many": "Gläser"}`) and the `ranking` scale question. Its template (`tasting-template/1`) carries the same `sections` and `criteria` as a results file, plus `"type": "scale"` or `"text"` per question.
 
-```json
-{"format": "tasting-template/1", "title": "Kaffee-Verkostung", "short": "Kaffee", "icon": "☕", "tagline": "…",
- "scale": {"min": 1, "max": 5},
- "sections": [{"title": "Die Nase", "criteria": [
-   {"key": "duft", "label": "Duft", "type": "scale", "low": "kaum", "high": "betörend"},
-   {"key": "was_riechst_du", "label": "Was riechst du?", "type": "text"}]}]}
+"Jetzt starten" sets `state: "live"` and creates `data/live-<slug>.json` (`live.py`). It freezes a copy of the questions, scale and ranking, because ratings are keyed by them. The rest stays in the plan and can change:
+
+```
+{"format": "live-tasting/1", "slug", "started", "phase": "tasting" | "ceremony" | "revealed",
+ "ceremony_order": [ids, worst first], "reveal_count", "scale", "sections", "ranking",
+ "items":   [{id, name, brand, note, price, amount, unit, image, creator, buyer, bought}],
+ "vessels": [{id, number, item_id, snapshot, image, added_by, bought_by}],
+ "ratings": {vessel_id: {uid: {"scores": {key: int}, "texts": {key: str}, "notes": str}}}}
 ```
 
-Keys come from the labels and are made unique by the app. When the tasting gets built, download the template, copy the live code as below and take the questions from it. Free-text questions become notes. Then add the tasting to the registry and remove the plan.
+`live.py` copies the proven flow of `views.py` without its chips content: shopping list, set-up with sequential numbers and shuffle, blind photos, rating, reveal. `to_archive()` turns a tasting into a `tasting-archive/1` file. Text answers go into the notes, and price per 100 g/ml goes along as `price_per_100`. So `archive.compute()`, `report.js` and `archive.js` serve its results, and the admin can download it as a finished results file. Photos live in `data/images/live-<slug>/`, apart from the chips photos. `bowls.js`, `unsealing.js` and `rate.js` are shared with the chips tasting; the last two take the live payload and the missing d20 die.
 
 ### A new live tasting
 

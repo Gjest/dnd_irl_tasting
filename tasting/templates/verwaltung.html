@@ -61,7 +61,7 @@
 
 <section class="m-card m-panel" id="teilnahme" aria-labelledby="teilnahme-titel">
   <h2 id="teilnahme-titel" class="m-panel-title">Teilnahme</h2>
-  <p class="m-hint">Wer bei einem geplanten Tasting mitmacht: bewerten, einkaufen, aufstellen. Lesen dürfen alle, auch archivierte Tastings. Beim Blutkrieg der Chips machen alle Spieler mit.</p>
+  <p class="m-hint">Wer bei einem eigenen Tasting mitmacht: einkaufen, aufstellen, bewerten. Wer ausgetragen wird, behält die schon abgegebenen Wertungen. Lesen dürfen alle, auch archivierte Tastings. Beim Blutkrieg der Chips machen alle Spieler mit.</p>
   {% if plans %}
   {% for plan in plans %}<form method="post" action="{{ url_for('admin_panel.set_participants', slug=plan.slug) }}" id="teilnahme-{{ plan.slug }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>{% endfor %}
   <div class="m-matrix-wrap">
@@ -69,7 +69,7 @@
       <thead>
         <tr>
           <th scope="col">Name</th>
-          {% for plan in plans %}<th scope="col"><a href="{{ url_for('plans.page', slug=plan.slug) }}">{{ plan.icon }} {{ plan.short or plan.title }}</a></th>{% endfor %}
+          {% for plan in plans %}<th scope="col"><a href="{{ url_for('plans.page', slug=plan.slug) }}">{{ plan.icon }} {{ plan.short or plan.title }}</a>{% if plan.get('state') == 'live' %} <small class="m-badge">läuft</small>{% endif %}</th>{% endfor %}
         </tr>
       </thead>
       <tbody>

@@ -1222,6 +1222,189 @@ class Verwaltung(Base):
         self.assertIn("Bob (player)\n", out.getvalue())
 
 
+class Live(Base):
+    """Tastings started from a plan: /live/<slug>/."""
+
+    BASE = "/live/cola-runde"
+
+    def start(self, participants=("a", "b", "admin")):
+        admin = self.client("admin")
+        self.post(admin, "/plaene/neu", title="Cola-Runde")
+        self.post(admin, "/plaene/cola-runde/abschnitt", title="Der Gaumen")
+        self.post(admin, "/plaene/cola-runde/abschnitt/0/frage", label="Geschmack", type="scale", low="bäh", high="hmm")
+        self.post(admin, "/plaene/cola-runde/abschnitt/0/frage", label="Was schmeckst du?", type="text")
+        self.post(admin, "/plaene/cola-runde/angaben", title="Cola-Runde", vessel_one="Glas", vessel_many="Gläser")
+        self.post(admin, "/verwaltung/teilnahme/cola-runde", uid=list(participants))
+        response = self.post(admin, "/plaene/cola-runde/starten")
+        self.assertEqual(response.headers["Location"], f"{self.BASE}/")
+        return admin
+
+    def data(self):
+        return self.store.document("live-cola-runde").read()
+
+    def item(self, client, name, **fields):
+        return self.post(client, f"{self.BASE}/einkauf", name=name, buyer="me", **fields)
+
+    def set_up(self, client, name):
+        item = next(i for i in self.data()["items"] if i["name"] == name)
+        self.post(client, f"{self.BASE}/einkauf/{item['id']}/aufstellen")
+        return next(v for v in self.data()["vessels"] if v["item_id"] == item["id"])
+
+    def test_starting_freezes_the_questions(self):
+        admin = self.client("admin")
+        self.post(admin, "/plaene/neu", title="Nur Text")
+        self.post(admin, "/plaene/nur-text/abschnitt", title="A")
+        self.post(admin, "/plaene/nur-text/abschnitt/0/frage", label="Was?", type="text")
+        self.post(admin, "/plaene/nur-text/starten")
+        self.assertFalse(self.store.document("live-nur-text").exists())  # no scale question, no ranking
+        self.assertEqual(self.post(self.client("a"), "/plaene/nur-text/starten").status_code, 403)
+        admin = self.start()
+        plan = next(p for p in self.store.document("plans").read()["plans"] if p["slug"] == "cola-runde")
+        self.assertEqual((plan["state"], plan["ranking"], plan["vessel"]), ("live", "geschmack", {"one": "Glas", "many": "Gläser"}))
+        self.assertEqual([c["key"] for c in self.data()["sections"][0]["criteria"]], ["geschmack", "was_schmeckst_du"])
+        self.post(admin, "/plaene/cola-runde/abschnitt/0/frage", label="Noch eine", type="scale")
+        self.assertEqual(len(self.data()["sections"][0]["criteria"]), 2)
+        self.assertEqual(len(plan["sections"][0]["criteria"]), 2)
+        self.assertEqual(admin.get("/plaene/cola-runde").headers["Location"], f"{self.BASE}/")
+        landing = self.client("c").get("/").get_data(as_text=True)
+        self.assertIn(f'href="{self.BASE}/"', landing)
+        self.assertIn("Eigenes Tasting", landing)
+        self.assertNotIn('href="/plaene/cola-runde"', landing)  # no longer under "Was als Nächstes?"
+        self.assertEqual(self.client("c").get("/live/nope/").status_code, 404)
+
+    def test_only_participants_shop_set_up_and_rate(self):
+        self.start()
+        alice, bob, cleo = self.client("a"), self.client("b"), self.client("c")
+        self.item(alice, "Cola Zero", brand="Discounter", note="ohne Zucker", price="0,49", amount="1500", unit="ml")
+        self.item(bob, "cola zero", brand="discounter")  # the same thing again
+        self.post(bob, f"{self.BASE}/einkauf", name="Wunsch-Cola", buyer="open")
+        items = {i["name"]: i for i in self.data()["items"]}
+        self.assertEqual(sorted(items), ["Cola Zero", "Wunsch-Cola"])
+        self.assertEqual((items["Cola Zero"]["price"], items["Cola Zero"]["amount"], items["Cola Zero"]["unit"]), (0.49, 1500, "ml"))
+        self.assertIsNone(items["Wunsch-Cola"]["buyer"])
+        wish = items["Wunsch-Cola"]["id"]
+        for url, fields in ((f"{self.BASE}/einkauf", {"name": "X"}), (f"{self.BASE}/einkauf/{wish}/kaufen", {}),
+                            (f"{self.BASE}/einkauf/{wish}/aufstellen", {}), (f"{self.BASE}/einkauf/{wish}/streichen", {})):
+            self.assertEqual(self.post(cleo, url, **fields).status_code, 403, url)
+        for url in (f"{self.BASE}/", f"{self.BASE}/einkauf", f"{self.BASE}/ergebnisse"):
+            self.assertEqual(cleo.get(url).status_code, 200, url)
+        self.assertIn("nicht eingetragen", cleo.get(f"{self.BASE}/").get_data(as_text=True))
+        self.post(alice, f"{self.BASE}/einkauf/{wish}/kaufen")
+        self.post(alice, f"{self.BASE}/einkauf/{wish}/gekauft")
+        wish_item = next(i for i in self.data()["items"] if i["id"] == wish)
+        self.assertEqual((wish_item["buyer"], wish_item["bought"]), ("a", True))
+        self.assertEqual(self.post(self.client("admin"), f"{self.BASE}/einkauf/{wish}/kaufen").status_code, 302)  # admin is entered
+        # Prices stay with whoever may edit the entry until the reveal.
+        self.assertIn("0,49 €", alice.get(f"{self.BASE}/einkauf").get_data(as_text=True))
+        self.assertNotIn("0,49 €", bob.get(f"{self.BASE}/einkauf").get_data(as_text=True))
+        self.assertIn("0,03 €/100 ml", alice.get(f"{self.BASE}/einkauf").get_data(as_text=True))
+
+    def test_photos_stay_with_the_tasting(self):
+        self.start()
+        alice = self.client("a")
+        alice.post(f"{self.BASE}/einkauf", data={"csrf_token": self.token(alice), "name": "Cola", "buyer": "me",
+                                                "image": (io.BytesIO(photo_bytes()), "c.png")}, content_type="multipart/form-data")
+        name = self.data()["items"][0]["image"]
+        self.assertTrue(os.path.exists(os.path.join(self.tmp.name, "images", "live-cola-runde", name)))
+        self.assertEqual(self.client("c").get(f"{self.BASE}/bild/{name}").status_code, 200)  # the list is open to all
+        self.post(alice, f"{self.BASE}/einkauf/{self.data()['items'][0]['id']}/streichen")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "images", "live-cola-runde", name)))
+
+    def test_containers_are_blind_and_rated_by_the_plan(self):
+        admin = self.start()
+        alice, bob = self.client("a"), self.client("b")
+        self.item(alice, "Cola Zero", brand="Discounter")
+        self.item(bob, "Classic", brand="Markencola")
+        first, second = self.set_up(alice, "Cola Zero"), self.set_up(alice, "Classic")
+        self.assertEqual((first["number"], second["number"]), (1, 2))
+        progress = bob.get(f"{self.BASE}/api/progress").get_data(as_text=True)
+        self.assertNotIn("Cola Zero", progress)
+        self.assertNotIn("Markencola", progress)
+        self.assertNotIn("Cola Zero", bob.get(f"{self.BASE}/").get_data(as_text=True))
+        self.assertIn("Cola Zero", alice.get(f"{self.BASE}/").get_data(as_text=True))  # she set it up
+        rate = f"{self.BASE}/gefaess/{first['id']}"
+        self.assertIn("Glas 1", bob.get(rate).get_data(as_text=True))
+        for bad in ({}, {"score_geschmack": "0"}, {"score_geschmack": "6"}, {"score_geschmack": "drei"}):
+            self.assertEqual(self.post(bob, rate, **bad).status_code, 422)
+        self.post(bob, rate, score_geschmack="2", text_was_schmeckst_du="Vanille", notes="zu süß")
+        self.assertEqual(self.data()["ratings"][first["id"]]["b"],
+                         {"scores": {"geschmack": 2}, "texts": {"was_schmeckst_du": "Vanille"}, "notes": "zu süß"})
+        self.post(admin, rate, score_geschmack="4")
+        self.assertEqual(self.data()["ratings"][first["id"]]["admin"]["scores"], {"geschmack": 4})
+        self.assertEqual(self.post(self.client("c"), rate, score_geschmack="3").status_code, 403)
+        self.post(admin, f"{self.BASE}/admin/mischen")
+        self.assertEqual(sorted(v["number"] for v in self.data()["vessels"]), [1, 2])
+        self.assertEqual({v["id"]: v["number"] for v in self.data()["vessels"]}, {first["id"]: 1, second["id"]: 2})
+        self.assertIn("Cola Zero", admin.get(f"{self.BASE}/admin").get_data(as_text=True))
+        self.assertEqual(alice.get(f"{self.BASE}/admin").status_code, 403)
+
+    def test_admin_rates_only_when_entered(self):
+        self.start(participants=("a", "b"))
+        alice = self.client("a")
+        self.item(alice, "Cola")
+        vessel = self.set_up(alice, "Cola")
+        self.assertEqual(self.post(self.client("admin"), f"{self.BASE}/gefaess/{vessel['id']}", score_geschmack="3").status_code, 403)
+
+    def test_reveal_and_results(self):
+        admin = self.start()
+        alice, bob = self.client("a"), self.client("b")
+        self.item(alice, "Cola Zero", brand="Discounter", price="0,50", amount="1000", unit="ml")
+        self.item(bob, "Classic", brand="Markencola", price="2", amount="1000", unit="ml")
+        zero, classic = self.set_up(alice, "Cola Zero"), self.set_up(bob, "Classic")
+        self.assertEqual(bob.get(f"{self.BASE}/api/ergebnisse").status_code, 403)
+        for client, z, c in ((alice, "4", "2"), (bob, "5", "3")):
+            self.post(client, f"{self.BASE}/gefaess/{zero['id']}", score_geschmack=z, text_was_schmeckst_du="Karamell")
+            self.post(client, f"{self.BASE}/gefaess/{classic['id']}", score_geschmack=c)
+        self.post(admin, f"{self.BASE}/admin/enthuellung")
+        self.assertEqual(self.data()["phase"], "ceremony")
+        self.assertEqual(self.data()["ceremony_order"], [classic["id"], zero["id"]])  # worst first
+        self.assertEqual(self.post(alice, f"{self.BASE}/gefaess/{zero['id']}", score_geschmack="1").status_code, 302)
+        self.assertEqual(self.data()["ratings"][zero["id"]]["a"]["scores"]["geschmack"], 4)  # sealed
+        ceremony = json.loads(admin.post(f"{self.BASE}/api/ceremony/next", headers={"X-CSRF-Token": self.token(admin)}).get_data(as_text=True))
+        self.assertEqual(ceremony["revealed"][0]["label"], "Markencola Classic")
+        self.assertEqual(ceremony["revealed"][0]["meta"], "Glas 2")
+        self.assertEqual(ceremony["revealed"][0]["score"], "Ø 2,5")
+        admin.post(f"{self.BASE}/api/ceremony/next", headers={"X-CSRF-Token": self.token(admin)})
+        self.assertEqual(self.data()["phase"], "revealed")
+        results = json.loads(bob.get(f"{self.BASE}/api/ergebnisse").get_data(as_text=True))
+        self.assertEqual([r["name"] for r in results["ranking"]], ["Discounter Cola Zero", "Markencola Classic"])
+        self.assertEqual(results["ranking"][0]["price_per_100"], 0.05)
+        self.assertIn("Das Schnäppchen", [a["title"] for a in results["awards"]])
+        self.assertIn("Was schmeckst du?: Karamell", [n["text"] for n in results["notes"]])
+        self.assertEqual([s["criteria"][0]["key"] for s in results["sections"]], ["geschmack"])  # text questions aren't scales
+        export = json.loads(admin.get(f"{self.BASE}/admin/export.json").get_data(as_text=True))
+        self.assertIsNone(archive.validate(export))
+        self.assertIn("♛ Discounter Cola Zero", bob.get("/").get_data(as_text=True))
+        self.assertEqual(bob.get(f"{self.BASE}/").headers["Location"], f"{self.BASE}/ergebnisse")
+        self.post(admin, f"{self.BASE}/admin/zurueck")
+        self.assertEqual(self.data()["phase"], "tasting")
+        self.assertEqual(len(self.data()["ratings"][zero["id"]]), 2)
+
+    def test_nothing_to_reveal_without_ratings(self):
+        admin = self.start()
+        self.post(admin, f"{self.BASE}/admin/enthuellung")
+        self.assertEqual(self.data()["phase"], "tasting")
+
+    def test_start_page_date_and_table_spot(self):
+        admin = self.start()
+        self.post(admin, "/start/daten", **{"date_cola-runde": "2026-12-05"})
+        self.assertEqual(self.store.document("start").read()["dates"]["cola-runde"], "2026-12-05")
+        admin.post("/start/tafel", data={"csrf_token": self.token(admin), "image": (io.BytesIO(photo_bytes(size=(400, 200))), "t.png")},
+                   content_type="multipart/form-data")
+        self.post(admin, "/start/tafel/punkte", **{"spot_cola-runde_x": "30", "spot_cola-runde_y": "40", "spot_cola-runde_r": "5"})
+        self.assertIn("cola-runde", self.store.document("start").read()["table"]["spots"])
+        self.assertIn(f'href="{self.BASE}/" class="m-spot"', self.client("a").get("/").get_data(as_text=True))
+
+    def test_deleting_a_running_tasting(self):
+        admin = self.start()
+        self.post(admin, f"{self.BASE}/admin/loeschen", confirm="falsch")
+        self.assertTrue(self.store.document("live-cola-runde").exists())
+        self.post(admin, f"{self.BASE}/admin/loeschen", confirm="cola-runde")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "live-cola-runde.json")))
+        self.assertEqual(self.store.document("plans").read()["plans"], [])
+        self.assertEqual(admin.get(f"{self.BASE}/").status_code, 404)
+
+
 class ArchiveStats(unittest.TestCase):
     def test_ranking_groups_flags_and_awards(self):
         result = archive.compute(small_archive())

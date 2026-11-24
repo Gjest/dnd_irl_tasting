@@ -1,0 +1,38 @@
+/* The guild's own tastings: dark wood, candlelight and brass, like the start page,
+   so any tasting started from a plan looks at home without a theme of its own. */
+.theme-gilde {
+  color-scheme: dark;
+  --ash: #1a110b;
+  --soot: #2a1b11;
+  --char: #3a2617;
+  --line: rgba(226, 182, 92, .28);
+  --ember: #ffb35c;
+  --brimstone: #e2b65c;
+  --blood: #ff8a7a;
+  --bone: #f1e6d2;
+  --dust: #c9b597;
+  --muted: #a99476;
+  --series-1: #e2b65c;
+  --series-2: #ff8a5c;
+  --series-1-fill: rgba(226, 182, 92, .22);
+  --chart-text: #c9b597;
+  --chart-label: #f1e6d2;
+  --chart-grid: rgba(241, 230, 210, .1);
+  --tooltip-bg: #2a1b11;
+  --tooltip-line: rgba(226, 182, 92, .45);
+  --tooltip-text: #f1e6d2;
+  color: var(--bone);
+  background:
+    radial-gradient(70% 45% at 50% -5%, rgba(255, 179, 92, .2), transparent 70%),
+    linear-gradient(180deg, #2a1b11, #1a110b 60%) fixed;
+}
+.theme-gilde .site-header { background: rgba(26, 17, 11, .92); border-bottom: 1px solid var(--line); }
+.theme-gilde .brand { color: var(--brimstone); }
+.theme-gilde .button-primary, .theme-gilde .tab[aria-selected=true] {
+  color: #2a1608; background: linear-gradient(180deg, #f3cf7f, #e2b65c 55%, #b98a3a); border-color: #7a5a24;
+}
+.theme-gilde .reveal-first { background: linear-gradient(180deg, #4a3414, var(--soot)); }
+.theme-gilde input, .theme-gilde select, .theme-gilde textarea { color: var(--bone); background: rgba(0, 0, 0, .3); }
+.theme-gilde textarea { width: 100%; padding: .6rem .75rem; font: inherit; border: 1px solid var(--line); border-radius: 8px; }
+.field-pair { display: grid; grid-template-columns: 2fr 1fr; gap: .8rem; }
+.stack .field-pair .field { margin: 0; }

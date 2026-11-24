@@ -18,7 +18,7 @@ from flask import (
     url_for,
 )
 
-from . import ideas, images, plans, results, security, views
+from . import ideas, images, live, plans, results, security, views
 from .registry import TASTINGS
 from .web import (admin_required, german_date, hidden_slugs, login_required, start_document, store, tasting_date,
                   visible_tastings, wants_json)
@@ -84,10 +84,19 @@ def landing():
             href = url_for("results.page", slug=tasting["slug"])
         info["date"] = tasting_date(tasting["slug"], info.get("date"))
         tiles.append({**tasting, **info, "href": href})
+    # Tastings started from a plan sit with the others, on the table picture too.
+    for tile in live.tiles():
+        tile["date"] = tasting_date(tile["slug"], tile.get("date"))
+        tiles.append(tile)
     view = request.cookies.get(VIEW_COOKIE)
     return render_template("landing.html", tiles=tiles, start=start_document().read(),
                            view=view if view in VIEWS else "tafel", plans=plans.tiles(), ideas=ideas.tile(),
                            hidden=[t for t in TASTINGS if t["slug"] in hidden_slugs()])
+
+
+def _start_page_tastings():
+    """Everything with a tile, so dates and table spots cover the started tastings as well."""
+    return visible_tastings() + [{"slug": plan["slug"]} for plan, _ in live.running()]
 
 
 # The start page shows either the table picture or the tiles. The choice is
@@ -121,7 +130,7 @@ def set_dates():
     """Saves the date of each tasting. An empty field falls back to the date its data brings."""
     changes = {}
     # Only the tastings on the form; a hidden one keeps its date.
-    for tasting in visible_tastings():
+    for tasting in _start_page_tastings():
         value = request.form.get(f"date_{tasting['slug']}", "").strip()
         if value:
             try:
@@ -299,7 +308,7 @@ def set_spots():
     hidden = hidden_slugs()
     spots = {slug: spot for slug, spot in ((start_document().read().get("table") or {}).get("spots") or {}).items()
              if slug in hidden}
-    for tasting in visible_tastings():
+    for tasting in _start_page_tastings():
         slug = tasting["slug"]
         if not request.form.get(f"spot_{slug}_x", "").strip():
             continue  # this tasting has no dish on the table

@@ -57,6 +57,13 @@ Below the tastings, "Was als Nächstes?" holds what is coming:
 
 - **Ideensammlung** (`/ideen`): everyone adds ideas for the next tasting, just a name, and gives each idea one to five stars. Tapping your own rating again takes it back. The list is sorted by average stars. Whoever added an idea, and the admin, can remove it.
 - **Planned tastings** (`/plaene/<name>`): the admin starts one with the + tile, gives it a name and adds questions in sections, as scales (with words for both ends) or free text. It shows as "Bald" on the start page, and everyone can read its questions. "Vorlage herunterladen" saves the questions as a JSON file (`tasting-template/1`), which "Neues Tasting planen" takes in again.
+- **Starting one:** "Jetzt starten" on a planned tasting turns it into a running one under `/live/<name>/`, with the flow of the chips tasting:
+  - **Shopping list:** free text (name, plus optional brand, variety or note, price and amount in g or ml). Who buys what, and whether it's bought.
+  - **Blind containers:** set up from the list with one tap and numbered. The plan says what they are called, e.g. Glas/Gläser. Only whoever set one up knows what is in it.
+  - **Rating:** the plan's questions, scales required, free text optional. The plan picks which scale question decides the ranking.
+  - **Reveal and results:** the admin reveals worst first. The results page is the one cola and water use, with price per 100 g/ml and a value award.
+
+  Only participants (set in `/verwaltung`) shop, set up and rate, the admin too if entered. Everyone can read. Once started, the questions are frozen; name, look and participants can still change. The admin page of the tasting shows which number holds what, shuffles the numbers, downloads the results as a `tasting-archive/1` file and deletes the tasting.
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) also has the plan for future tastings.
 
@@ -112,6 +119,7 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | `data/cola.json`, `data/wasser.json` | Results of the finished tastings, written by the app after an upload |
 | `data/plans.json` | Planned tastings with their questions and participants |
 | `data/ideas.json` | The idea list with everyone's stars |
+| `data/live-<name>.json`, `data/images/live-<name>/` | A running tasting started from a plan: list, containers, ratings, photos |
 | `data/images/` | Photos of bags, re-encoded as JPEG |
 | `data/backups/` | A copy at most every 5 minutes while data changes, last 100 kept |
 | `data/users.json` | Names and passphrase hashes |

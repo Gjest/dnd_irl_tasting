@@ -1,0 +1,64 @@
+{% extends "live_base.html" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+<p class="eyebrow">{{ plan.title }} · Admin</p>
+<h1>Status: {{ status }}</h1>
+<p class="lead">{{ vessels|length }} {{ word.many if vessels|length != 1 else word.one }}, {{ data['items']|length }} Einträge auf der Einkaufsliste, {{ ratings }} Wertungen.
+  Dabei: {% if participants %}{{ participants|map(attribute='name')|join(', ') }}{% else %}noch niemand{% endif %}
+  · <a href="{{ url_for('admin_panel.page') }}#teilnahme">Teilnahme bearbeiten</a></p>
+
+{% if data.phase == 'tasting' %}
+<section class="card stack">
+  <h2>Enthüllung</h2>
+  <p class="hint">Startet die Zeremonie: Die Wertung wird versiegelt, dann deckst du Stück für Stück auf, vom schlechtesten bis zum besten.</p>
+  <form method="post" action="{{ url_for('live.start_ceremony', slug=plan.slug) }}" data-confirm="Jetzt versiegeln und die Enthüllung starten?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="button button-primary" type="submit">Enthüllung starten</button>
+  </form>
+</section>
+{% else %}
+<section class="card stack">
+  <h2>Zurück an den Tisch</h2>
+  <p class="hint">Öffnet die Wertung wieder. Alle Wertungen bleiben erhalten.</p>
+  <form method="post" action="{{ url_for('live.reopen', slug=plan.slug) }}" data-confirm="Die Wertung wieder öffnen?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="button" type="submit">Wieder öffnen</button>
+  </form>
+</section>
+{% endif %}
+
+<h2>Was steht wo?</h2>
+<p class="hint">Nur du siehst diese Zuordnung.</p>
+{% if vessels %}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th class="num">{{ word.one }}</th><th>Inhalt</th><th>Aufgestellt von</th><th class="num">Wertungen</th></tr></thead>
+    <tbody>
+      {% for vessel in vessels %}
+      <tr><td class="num">{{ vessel.number }}</td><td>{{ vessel.label }}</td><td>{{ vessel.added_name }}</td><td class="num">{{ vessel.ratings }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if data.phase == 'tasting' %}
+<form method="post" action="{{ url_for('live.shuffle', slug=plan.slug) }}" data-confirm="Die Nummern neu verteilen?">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <p><button class="button" type="submit">Nummern mischen</button> <span class="hint">Geht nur, solange noch niemand bewertet hat.</span></p>
+</form>
+{% endif %}
+{% else %}
+<p class="empty">Noch nichts aufgestellt.</p>
+{% endif %}
+
+<details class="card">
+  <summary>Daten</summary>
+  <p class="hint">Die Ergebnisse als Datei im Format der abgeschlossenen Tastings (<code>tasting-archive/1</code>).</p>
+  <p><a class="button" href="{{ url_for('live.export', slug=plan.slug) }}">Ergebnisse herunterladen</a></p>
+  <form method="post" action="{{ url_for('live.delete', slug=plan.slug) }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Tasting mit allen Daten löschen: zum Bestätigen „{{ plan.title }}“ eintippen</span>
+      <input type="text" name="confirm" autocomplete="off"></label>
+    <button class="button" type="submit">Endgültig löschen</button>
+  </form>
+</details>
+{% endblock %}

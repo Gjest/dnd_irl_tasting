@@ -6,12 +6,13 @@ const countLabel = document.getElementById("rate-count");
 const requiredNames = [...new Set(
   [...form.querySelectorAll("input[type=radio][required]")].map((input) => input.name),
 )];
+// Only the chips tasting has the d20 die; other tastings rate with scales alone.
 const dcInput = form.elements.namedItem("dc");
 
 function updateCount() {
   const done = requiredNames.filter((name) => form.querySelector(`input[name="${name}"]:checked`)).length
-    + (dcInput.value ? 1 : 0);
-  const total = requiredNames.length + 1;
+    + (dcInput && dcInput.value ? 1 : 0);
+  const total = requiredNames.length + (dcInput ? 1 : 0);
   countLabel.textContent = done === total ? "Alles bewertet" : `${done} von ${total} bewertet`;
 }
 
@@ -59,7 +60,7 @@ function showCrit(isTop) {
 }
 
 if (form.dataset.hasSaved !== "1") restoreDraft();
-die.syncFromInput();
+if (dcInput) die.syncFromInput();
 updateCount();
 
 form.addEventListener("input", () => {
@@ -67,8 +68,10 @@ form.addEventListener("input", () => {
   updateCount();
 });
 // The die reports "change" once it has settled, so spinning past 20 doesn't count.
-dcInput.addEventListener("change", () => {
-  if (dcInput.value === "20") showCrit(true);
-  if (dcInput.value === "1") showCrit(false);
-});
+if (dcInput) {
+  dcInput.addEventListener("change", () => {
+    if (dcInput.value === "20") showCrit(true);
+    if (dcInput.value === "1") showCrit(false);
+  });
+}
 form.addEventListener("submit", clearDraft);

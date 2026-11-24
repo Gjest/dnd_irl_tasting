@@ -1,0 +1,16 @@
+{% extends "live_base.html" %}
+{% block title %}Ergebnisse{% endblock %}
+{% block content %}
+<p class="eyebrow">{% if data.started %}Gestartet am {{ data.started|german_date }} · {% endif %}Enthüllt</p>
+<h1>{{ plan.title }}</h1>
+{% if plan.tagline %}<p class="lead">{{ plan.tagline }}</p>{% endif %}
+<div id="summary" class="tiles"></div>
+<nav id="tabs" class="tabs" aria-label="Auswertungen"></nav>
+<div id="panel" class="panel" data-results-url="{{ url_for('live.api_results', slug=plan.slug) }}"></div>
+<p id="load-error" class="flash flash-error" hidden></p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
+<script src="{{ url_for('static', filename='js/report.js') }}"></script>
+<script src="{{ url_for('static', filename='js/archive.js') }}"></script>
+{% endblock %}

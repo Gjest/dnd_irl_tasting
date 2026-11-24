@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  {# The page scripts (bowls.js, unsealing.js) build their addresses on this. #}
+  <meta name="app-base" content="{{ url_for('live.home', slug=plan.slug) }}">
+  <meta name="theme-color" content="#1a110b">
+  <title>{% block title %}{{ plan.title }}{% endblock %} · Die Verkostungsgilde</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme-gilde.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+<body class="theme-gilde {% block body_class %}{% endblock %}">
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('live.home', slug=plan.slug) }}"><span aria-hidden="true">{{ plan.icon }}</span> {{ plan.short or plan.title }}</a>
+    <nav class="site-nav" aria-label="Hauptmenü">
+      <a href="{{ url_for('core.landing') }}" title="Alle Verkostungen">← Alle</a>
+      <a href="{{ url_for('live.home', slug=plan.slug) }}">{{ word.many }}</a>
+      <a href="{{ url_for('live.shopping', slug=plan.slug) }}">Einkauf</a>
+      <a href="{{ url_for('live.results', slug=plan.slug) }}">Ergebnisse</a>
+      {% if user.role == 'admin' %}<a href="{{ url_for('live.admin', slug=plan.slug) }}">Admin</a>{% endif %}
+      <form method="post" action="{{ url_for('core.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit" title="Abmelden: {{ user.name }}">Raus</button>
+      </form>
+    </nav>
+  </header>
+  <main class="page">
+    {% with messages = get_flashed_messages() %}
+      {% for message in messages %}<p class="flash" role="status">{{ message }}</p>{% endfor %}
+    {% endwith %}
+    {% if not takes_part and data.phase == 'tasting' %}
+    <p class="flash">Du bist bei diesem Tasting nicht eingetragen. Du kannst alles ansehen, aber nicht mitmachen.{% if user.role == 'admin' %} Eintragen kannst du dich unter <a href="{{ url_for('admin_panel.page') }}#teilnahme">Verwaltung → Teilnahme</a>.{% endif %}</p>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

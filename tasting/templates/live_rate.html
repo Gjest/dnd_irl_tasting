@@ -1,0 +1,52 @@
+{% extends "live_base.html" %}
+{% block title %}{{ word.one }} {{ vessel.number }}{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('live.home', slug=plan.slug) }}">← Alle {{ word.many }}</a>
+<p class="eyebrow">{% if own_label %}Von dir aufgestellt: {{ own_label }}{% else %}Blindverkostung{% endif %}</p>
+<h1>{{ word.one }} {{ vessel.number }}</h1>
+{% if errors %}
+<div class="flash flash-error" role="alert">
+  <p>Es fehlt noch etwas:</p>
+  <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+<form method="post" id="rate-form" class="rate-form"
+      data-draft-key="draft:{{ plan.slug }}:{{ user.id }}:{{ vessel.id }}" data-has-saved="{{ '1' if rating.scores else '0' }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% for section in data.sections if section.criteria %}
+  <section class="rate-section">
+    <h2>{{ section.title }}</h2>
+    {% for q in section.criteria %}
+    {% if q.type == 'text' %}
+    <label class="field"><span>{{ q.label }} <em>freiwillig</em></span>
+      <textarea name="text_{{ q.key }}" rows="2" maxlength="{{ max_text }}">{{ rating.texts.get(q.key, '') }}</textarea></label>
+    {% else %}
+    <fieldset class="scale">
+      <legend>{{ q.label }}</legend>
+      <div class="scale-options">
+        {% for n in scale %}
+        <label>
+          <input type="radio" name="score_{{ q.key }}" value="{{ n }}" required {% if rating.scores.get(q.key) == n %}checked{% endif %}>
+          <span>{{ n }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="scale-ends"><span>{{ q.low }}</span><span>{{ q.high }}</span></div>
+    </fieldset>
+    {% endif %}
+    {% endfor %}
+  </section>
+  {% endfor %}
+  <section class="rate-section">
+    <h2>Notizen <small>Freiwillig</small></h2>
+    <label class="field"><span>Was dir sonst noch auffällt</span>
+      <textarea name="notes" rows="3" maxlength="{{ max_notes }}">{{ rating.notes or '' }}</textarea></label>
+  </section>
+  <div class="rate-submit">
+    <span id="rate-count" class="rate-count" aria-live="polite"></span>
+    <button class="button button-primary button-big" type="submit">Wertung speichern</button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', filename='js/rate.js') }}"></script>{% endblock %}

@@ -24,7 +24,9 @@ function renderRanking() {
   panel.append(heading("Rangliste", `Durchschnitt von „${data.ranking_label}“, von ${data.scale.min} bis ${data.scale.max}.`));
   panel.append(bars(data.ranking.map((row) => ({
     label: `${row.rank}. ${row.name}`,
-    detail: [row.group, `${row.raters} Wertungen`].filter(Boolean).join(" · "),
+    detail: [row.group, `${row.raters} Wertung${row.raters === 1 ? "" : "en"}`,
+      row.price_per_100 != null ? `${fmt(row.price_per_100, 2)} €/100 ${row.unit || "g"}` : null,
+    ].filter(Boolean).join(" · "),
     value: row.value,
     valueText: fmt(row.value),
   })), data.scale.max));

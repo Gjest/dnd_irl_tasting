@@ -1,0 +1,38 @@
+{% extends "live_base.html" %}
+{% block title %}{{ word.many }}{% endblock %}
+{% block content %}
+<p class="eyebrow">{{ plan.title }}{% if plan.tagline %} · {{ plan.tagline }}{% endif %}</p>
+<h1>Die {{ word.many }}</h1>
+<p class="lead">Blind probieren, ehrlich urteilen. Bis zur Enthüllung kannst du jede Wertung noch ändern.</p>
+{% if takes_part %}
+<div id="bowls" class="bowl-grid" data-rate-url="{{ url_for('live.rate', slug=plan.slug, vessel_id='__id__') }}"></div>
+<p id="no-bowls" class="empty" hidden>Noch nichts aufgestellt. Auf der <a href="{{ url_for('live.shopping', slug=plan.slug) }}">Einkaufsliste</a> wird aus jedem Eintrag mit einem Tipp ein {{ word.one }}.</p>
+{% else %}
+<p class="hint">{{ data.vessels|length }} {{ word.many if data.vessels|length != 1 else word.one }} auf dem Tisch.</p>
+{% endif %}
+
+{% if mine %}
+<h2>Von dir aufgestellt</h2>
+<p class="hint">Nur du weißt, was darin ist. Du bewertest es trotzdem mit.</p>
+<ul class="my-chips">
+  {% for vessel in mine %}
+  <li>
+    <span><b>{{ word.one }} {{ vessel.number }}</b> {{ vessel.label }}</span>
+    <span class="actions">
+      <form method="post" action="{{ url_for('live.delete_vessel', slug=plan.slug, vessel_id=vessel.id) }}" data-confirm="{{ word.one }} {{ vessel.number }} abräumen? Ihre Wertungen gehen mit.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link-button" type="submit">Abräumen</button>
+      </form>
+    </span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% if takes_part %}
+<h2>Wer probiert noch?</h2>
+<ul id="progress" class="progress-list"></ul>
+<p id="load-error" class="flash flash-error" hidden>Die Verbindung ist abgerissen. Neuer Versuch läuft.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% if takes_part %}<script src="{{ url_for('static', filename='js/bowls.js') }}"></script>{% endif %}{% endblock %}

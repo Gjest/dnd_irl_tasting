@@ -200,6 +200,10 @@ class Store:
             self._documents[slug] = JsonDocument(self.data_dir / f"{slug}.json", self.backup_dir, empty)
         return self._documents[slug]
 
+    def forget(self, slug):
+        """Drops a deleted document from the cache, so a new one with that name starts empty."""
+        self._documents.pop(slug, None)
+
     # Users are re-read on every request so that passphrase changes made with
     # manage.py (a separate process) apply without restarting the server.
     def users(self):
