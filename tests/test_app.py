@@ -1,5 +1,6 @@
 """End-to-end checks of the rules that matter: blindness, security, persistence, stats."""
 
+import contextlib
 import io
 import json
 import os
@@ -1076,6 +1077,149 @@ class Tastings(Base):
         chips = player.get("/chips/einkauf").get_data(as_text=True)
         self.assertIn("css/style.css", chips)
         self.assertIn('content="/chips/"', chips)
+
+
+class Verwaltung(Base):
+    def login(self, uid, passphrase):
+        client = self.app.test_client()
+        response = client.post("/login", data={"csrf_token": self.token(client), "user": uid, "passphrase": passphrase})
+        return client, response.status_code
+
+    def passphrase(self, response):
+        return re.search(r'class="m-passphrase" aria-label="Passphrase">([^<]+)<', response.get_data(as_text=True)).group(1)
+
+    def test_only_the_admin_reaches_the_panel(self):
+        player = self.client("a")
+        self.assertEqual(player.get("/verwaltung").status_code, 403)
+        self.assertNotIn("/verwaltung", player.get("/").get_data(as_text=True))
+        for url, fields in (("/verwaltung/nutzer", {"name": "X"}), ("/verwaltung/nutzer/b/passphrase", {}),
+                            ("/verwaltung/nutzer/b/name", {"name": "Y"}), ("/verwaltung/nutzer/b/rolle", {"role": "admin"}),
+                            ("/verwaltung/nutzer/b/aktiv", {"active": "0"}), ("/verwaltung/nutzer/b/loeschen", {}),
+                            ("/verwaltung/tastings", {}), ("/verwaltung/teilnahme/x", {})):
+            self.assertEqual(self.post(player, url, **fields).status_code, 403, url)
+        admin = self.client("admin")
+        self.assertIn("/verwaltung", admin.get("/").get_data(as_text=True))
+        self.assertEqual(admin.get("/verwaltung").status_code, 200)
+
+    def test_new_login_shows_its_passphrase_once(self):
+        admin = self.client("admin")
+        response = self.post(admin, "/verwaltung/nutzer", name="Gandalf der Graue", role="player")
+        self.assertEqual(response.status_code, 200)
+        passphrase = self.passphrase(response)
+        user = self.store.users()["gandalf-der-graue"]
+        self.assertEqual((user["name"], user["role"]), ("Gandalf der Graue", "player"))
+        self.assertNotIn(passphrase, json.dumps(self.store.users()))
+        self.assertNotIn(passphrase, admin.get("/verwaltung").get_data(as_text=True))
+        self.assertEqual(self.login("gandalf-der-graue", passphrase)[1], 302)
+        # The same name again is refused and changes nothing.
+        self.post(admin, "/verwaltung/nutzer", name="Gandalf  der graue")
+        self.assertEqual(self.store.users()["gandalf-der-graue"]["hash"], user["hash"])
+        self.post(admin, "/verwaltung/nutzer", name="Saruman", role="admin")
+        self.assertEqual(self.store.users()["saruman"]["role"], "admin")
+
+    def test_reset_rename_and_role(self):
+        admin, bob = self.client("admin"), self.client("b")
+        passphrase = self.passphrase(self.post(admin, "/verwaltung/nutzer/b/passphrase"))
+        self.assertEqual(bob.get("/").status_code, 302)  # the old session is over
+        self.assertEqual(self.login("b", PASS)[1], 401)
+        bob, status = self.login("b", passphrase)
+        self.assertEqual(status, 302)
+        self.post(admin, "/verwaltung/nutzer/b/name", name="Bob der Baumeister")
+        self.assertEqual(self.store.users()["b"]["name"], "Bob der Baumeister")
+        self.assertEqual(bob.get("/").status_code, 200)  # renaming keeps the login
+        self.post(admin, "/verwaltung/nutzer/b/rolle", role="admin")
+        self.assertEqual(bob.get("/verwaltung").status_code, 200)
+        self.assertEqual(self.post(admin, "/verwaltung/nutzer/b/rolle", role="king").status_code, 400)
+
+    def test_deactivated_logins_cannot_enter_but_keep_their_name(self):
+        admin, chips = self.add_chips()
+        alice = self.client("a")
+        self.rate(alice, chips[0]["id"], 12)
+        self.post(admin, "/verwaltung/nutzer/a/aktiv", active="0")
+        self.assertFalse(self.store.users()["a"]["active"])
+        self.assertEqual(alice.get("/").status_code, 302)
+        self.assertEqual(self.login("a", PASS)[1], 401)
+        self.assertNotIn('value="a"', self.client().get("/login").get_data(as_text=True))
+        self.assertIn("Alice", json.dumps(stats.compute(self.store.read(), self.store.users()), ensure_ascii=False))
+        progress = self.client("b").get("/chips/api/progress").get_data(as_text=True)
+        self.assertNotIn("Alice", progress)
+        self.post(admin, "/verwaltung/nutzer/a/aktiv", active="1")
+        self.assertNotIn("active", self.store.users()["a"])
+        self.assertEqual(self.login("a", PASS)[1], 302)
+
+    def test_guards_for_admins_and_data(self):
+        admin, chips = self.add_chips()
+        for url, fields in (("/verwaltung/nutzer/admin/aktiv", {"active": "0"}), ("/verwaltung/nutzer/admin/rolle", {"role": "player"}),
+                            ("/verwaltung/nutzer/admin/loeschen", {})):
+            self.post(admin, url, **fields)
+        self.assertEqual(self.store.users()["admin"]["role"], "admin")
+        self.assertNotIn("active", self.store.users()["admin"])
+        # A second admin can't take away the last active admin either.
+        self.post(admin, "/verwaltung/nutzer/b/rolle", role="admin")
+        bob = self.client("b")
+        self.post(bob, "/verwaltung/nutzer/b/aktiv", active="0")  # own login
+        self.post(admin, "/verwaltung/nutzer/b/rolle", role="player")
+        self.post(bob, "/verwaltung/nutzer/admin/aktiv", active="1")
+        self.assertEqual(self.store.users()["b"]["role"], "player")
+        # Someone with a rating stays; someone without any data can go.
+        self.rate(self.client("a"), chips[0]["id"], 12)
+        self.post(admin, "/verwaltung/nutzer/a/loeschen")
+        self.assertIn("a", self.store.users())
+        self.post(admin, "/verwaltung/nutzer/c/loeschen")
+        self.assertNotIn("c", self.store.users())
+        self.assertEqual(self.post(admin, "/verwaltung/nutzer/nope/loeschen").status_code, 404)
+
+    def test_participants_per_planned_tasting(self):
+        admin = self.client("admin")
+        self.post(admin, "/plaene/neu", title="Kaffee")
+        self.assertEqual(self.store.document("plans").read()["plans"][0]["participants"], [])
+        self.post(admin, "/verwaltung/teilnahme/kaffee", uid=["a", "admin", "nope", "a"])
+        self.assertEqual(self.store.document("plans").read()["plans"][0]["participants"], ["a", "admin"])
+        self.assertIn("Dabei: Alice, Admin", self.client("b").get("/plaene/kaffee").get_data(as_text=True))
+        self.assertEqual(self.post(admin, "/verwaltung/teilnahme/nope", uid="a").status_code, 404)
+        # Taking part counts as data: Alice can't be deleted, only deactivated.
+        self.post(admin, "/verwaltung/nutzer/a/loeschen")
+        self.assertIn("a", self.store.users())
+
+    def test_hidden_tastings_leave_the_start_page(self):
+        admin, player = self.client("admin"), self.client("a")
+        self.post(admin, "/start/daten", date_cola="2026-02-14", date_chips="2026-11-21")
+        admin.post("/start/tafel", data={"csrf_token": self.token(admin), "image": (io.BytesIO(photo_bytes(size=(400, 200))), "t.png")},
+                   content_type="multipart/form-data")
+        self.post(admin, "/start/tafel/punkte", spot_cola_x="40", spot_cola_y="50", spot_cola_r="5",
+                  spot_chips_x="20", spot_chips_y="50", spot_chips_r="5")
+        self.post(admin, "/verwaltung/tastings", shown=["wasser"])
+        self.assertEqual(self.store.document("start").read()["hidden"], ["chips", "cola"])
+        page = player.get("/").get_data(as_text=True)
+        self.assertNotIn('href="/cola/"', page)
+        self.assertNotIn('href="/chips/"', page)
+        self.assertIn('href="/wasser/"', page)
+        for url in ("/cola/", "/chips/", "/chips/einkauf", "/cola/api/ergebnisse"):
+            self.assertEqual(player.get(url).status_code, 404, url)
+        self.assertEqual(admin.get("/cola/").status_code, 200)
+        self.assertEqual(admin.get("/chips/admin").status_code, 200)
+        self.assertIn("Ausgeblendet:", admin.get("/").get_data(as_text=True))
+        # Saving dates and spots for what is shown keeps those of the hidden tastings.
+        self.post(admin, "/start/daten", date_wasser="2026-08-16")
+        self.post(admin, "/start/tafel/punkte", spot_wasser_x="60", spot_wasser_y="50", spot_wasser_r="5")
+        start = self.store.document("start").read()
+        self.assertEqual(start["dates"], {"cola": "2026-02-14", "chips": "2026-11-21", "wasser": "2026-08-16"})
+        self.assertEqual(sorted(start["table"]["spots"]), ["chips", "cola", "wasser"])
+        self.post(admin, "/verwaltung/tastings", shown=["chips", "cola", "wasser"])
+        self.assertEqual(player.get("/cola/").status_code, 200)
+        self.assertIn('href="/chips/" class="m-spot"', player.get("/").get_data(as_text=True))
+
+    def test_manage_list_shows_deactivated(self):
+        users = self.store.users()
+        users["c"]["active"] = False
+        self.store.save_users(users)
+        os.environ["DATA_DIR"] = self.tmp.name
+        self.addCleanup(os.environ.pop, "DATA_DIR", None)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            manage_main(["list"])
+        self.assertIn("Cleo (player, deaktiviert)", out.getvalue())
+        self.assertIn("Bob (player)\n", out.getvalue())
 
 
 class ArchiveStats(unittest.TestCase):

@@ -18,6 +18,7 @@ The group has tasted cola (Google Forms), water (a Spring app) and chips (this a
 /cola/  /wasser/  finished tastings, each in its own look         results.py, results_page.html, theme-<slug>.css
 /plaene/…         planned tastings: name and questions, "Bald"    plans.py, plan.html, plan_new.html
 /ideen            the idea list with stars                        ideas.py, ideas.html
+/verwaltung       admin panel: logins, participants, hidden tastings  admin_panel.py, verwaltung.html; accounts.py
 ```
 
 | Module | Job | Reused by |
@@ -25,7 +26,8 @@ The group has tasted cola (Google Forms), water (a Spring app) and chips (this a
 | `registry.py` | The list of tiles: slug, kind, title, tagline, icon, theme | The start page and `results.py` |
 | `store.py` → `JsonDocument` | One JSON file in memory, atomic writes, rolling backups, `replace()` with a backup first | `tasting.json` for chips, `<slug>.json` for every other tasting |
 | `images.py` | Re-encodes uploaded photos, `save_from_form()` for the camera and file buttons | Bowls, list items and start page photos (`data/start.json`) |
-| `web.py` | `store()`, `login_required`, `admin_required` | Every blueprint |
+| `web.py` | `store()`, `login_required`, `admin_required`, `visible_tastings()`, `check_not_hidden()` | Every blueprint |
+| `accounts.py` | Logins: create, reset, the guards for the last admin; `"active": false` in `users.json` | `manage.py` and the admin panel |
 | `archive.py` | Checks a results file and computes ranking, awards, groups, people, twins, flags and notes | `results.py` |
 | `static/js/report.js` | Bars, tables, heat maps, taste twins, chart colors read from the theme | Chips results and every results page |
 | `static/css/style.css` | Components (cards, tabs, bars, tables) styled through CSS variables | Chips, and as the base below every `theme-<slug>.css` |

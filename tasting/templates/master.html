@@ -15,6 +15,7 @@
     <a class="m-brand" href="{{ url_for('core.landing') if user else url_for('core.login') }}"><span aria-hidden="true">⚜</span> Die Verkostungsgilde</a>
     {% if user %}
     <form method="post" action="{{ url_for('core.logout') }}" class="m-user">
+      {% if user.role == 'admin' %}<a class="m-admin-link" href="{{ url_for('admin_panel.page') }}">Verwaltung</a>{% endif %}
       <span>{{ user.name }}</span>
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="m-link" type="submit">Abmelden</button>

@@ -5,6 +5,8 @@ from functools import wraps
 
 from flask import abort, current_app, g, redirect, request, url_for
 
+from .registry import TASTINGS
+
 
 def store():
     return current_app.extensions["store"]
@@ -13,6 +15,22 @@ def store():
 def start_document():
     """data/start.json: photos and dates for the start page, kept across tastings."""
     return store().document("start", empty=lambda: {"photos": [], "background": None, "dates": {}, "table": None})
+
+
+def hidden_slugs():
+    """Tastings the admin took off the start page, e.g. the samples on a fresh install."""
+    return set(start_document().read().get("hidden", []))
+
+
+def visible_tastings():
+    hidden = hidden_slugs()
+    return [tasting for tasting in TASTINGS if tasting["slug"] not in hidden]
+
+
+def check_not_hidden(slug):
+    """A hidden tasting is gone for players; the admin still reaches it to look or bring it back."""
+    if slug in hidden_slugs() and g.get("user") and g.user["role"] != "admin":
+        abort(404)
 
 
 def tasting_date(slug, fallback=None):

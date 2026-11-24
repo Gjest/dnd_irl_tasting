@@ -79,6 +79,14 @@ Players can change their own chips and delete them until someone else has rated 
 
 ## Logins
 
+As admin, "Verwaltung" in the header opens the admin panel (`/verwaltung`):
+
+- **Nutzer:** add a login (player or admin), give someone a new passphrase, rename, change the role, deactivate or delete. A new passphrase is shown once on the page that answers the form and is never stored. Deactivated logins can't sign in and drop out of the login list, but their name stays in old results. Only a login without any data can be deleted. Nobody can lock out themselves or the last active admin.
+- **Teilnahme:** who takes part in which planned tasting. Everyone logged in can still read every tasting. In the chips tasting all players take part, as before.
+- **Tastings auf der Startseite:** hide chips, cola or water, e.g. on a fresh install for another group. Hidden tastings disappear for players, also at their addresses. Their data, dates and table spots stay until they are shown again.
+
+The same works from the command line:
+
 ```bash
 docker compose exec app python -m tasting.manage reset "Milka"
 ```
@@ -100,9 +108,9 @@ Everything is in `./data` on the laptop, so it survives restarts and rebuilds. I
 | File | Content |
 |---|---|
 | `data/tasting.json` | Chips and all ratings, plain JSON |
-| `data/start.json` | Photos on the start page, the background, the table picture with its dishes, and the date of each tasting |
+| `data/start.json` | Photos on the start page, the background, the table picture with its dishes, the date of each tasting, and which tastings are hidden |
 | `data/cola.json`, `data/wasser.json` | Results of the finished tastings, written by the app after an upload |
-| `data/plans.json` | Planned tastings with their questions |
+| `data/plans.json` | Planned tastings with their questions and participants |
 | `data/ideas.json` | The idea list with everyone's stars |
 | `data/images/` | Photos of bags, re-encoded as JPEG |
 | `data/backups/` | A copy at most every 5 minutes while data changes, last 100 kept |

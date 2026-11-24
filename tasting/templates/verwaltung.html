@@ -1,0 +1,110 @@
+{% extends "master.html" %}
+{% block title %}Verwaltung · Die Verkostungsgilde{% endblock %}
+{% block content %}
+<p class="m-eyebrow"><a href="{{ url_for('core.landing') }}">Die Verkostungsgilde</a> · Admin</p>
+<h1 class="m-title">Verwaltung</h1>
+<p class="m-lead">Logins, wer bei welchem Tasting mitmacht, und welche Tastings auf der Startseite stehen.</p>
+
+<section class="m-card m-panel" id="nutzer" aria-labelledby="nutzer-titel">
+  <h2 id="nutzer-titel" class="m-panel-title">Nutzer</h2>
+  <p class="m-hint">Ein neuer Login bekommt eine Passphrase, die nur einmal angezeigt wird. Deaktivierte können sich nicht mehr anmelden, ihr Name bleibt aber in alten Ergebnissen. Löschen geht nur bei Logins ohne Daten.</p>
+  <ul class="m-people">
+    {% for person in people %}
+    <li class="m-person{% if not person.active %} is-inactive{% endif %}">
+      <div class="m-person-head">
+        <span class="m-person-name">{{ person.name }}</span>
+        <span class="m-badge">{{ roles[person.role] or person.role }}</span>
+        {% if not person.active %}<span class="m-badge m-badge-off">deaktiviert</span>{% endif %}
+        {% if person.me %}<span class="m-badge">du</span>{% endif %}
+      </div>
+      <details class="m-person-edit">
+        <summary>Bearbeiten</summary>
+        <form method="post" action="{{ url_for('admin_panel.rename_user', uid=person.id) }}" class="m-inline-row">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label class="m-field"><span>Name</span><input type="text" name="name" maxlength="{{ max_name }}" required value="{{ person.name }}"></label>
+          <button class="m-button m-button-quiet" type="submit">Umbenennen</button>
+        </form>
+        <div class="m-actions">
+          <form method="post" action="{{ url_for('admin_panel.reset_user', uid=person.id) }}" data-confirm="{{ person.name }} bekommt eine neue Passphrase und wird überall abgemeldet. Weiter?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="m-link" type="submit">Neue Passphrase</button>
+          </form>
+          {% if not person.me %}
+          <form method="post" action="{{ url_for('admin_panel.set_role', uid=person.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="role" value="{{ 'player' if person.role == 'admin' else 'admin' }}">
+            <button class="m-link" type="submit">{{ 'Zum Spieler machen' if person.role == 'admin' else 'Zum Admin machen' }}</button>
+          </form>
+          <form method="post" action="{{ url_for('admin_panel.set_active', uid=person.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="active" value="{{ '0' if person.active else '1' }}">
+            <button class="m-link" type="submit">{{ 'Deaktivieren' if person.active else 'Wieder aktivieren' }}</button>
+          </form>
+          <form method="post" action="{{ url_for('admin_panel.delete_user', uid=person.id) }}" data-confirm="Login von {{ person.name }} endgültig löschen?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="m-link m-danger" type="submit">Löschen</button>
+          </form>
+          {% endif %}
+        </div>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  <form method="post" action="{{ url_for('admin_panel.add_user') }}" class="m-inline-form m-two">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="m-field"><span>Neuer Login: Name</span><input type="text" name="name" maxlength="{{ max_name }}" required placeholder="z. B. Gandalf"></label>
+    <label class="m-field"><span>Rolle</span>
+      <select name="role">{% for key, label in roles.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></label>
+    <div class="m-wide"><button class="m-button" type="submit">Login anlegen</button></div>
+  </form>
+</section>
+
+<section class="m-card m-panel" id="teilnahme" aria-labelledby="teilnahme-titel">
+  <h2 id="teilnahme-titel" class="m-panel-title">Teilnahme</h2>
+  <p class="m-hint">Wer bei einem geplanten Tasting mitmacht: bewerten, einkaufen, aufstellen. Lesen dürfen alle, auch archivierte Tastings. Beim Blutkrieg der Chips machen alle Spieler mit.</p>
+  {% if plans %}
+  {% for plan in plans %}<form method="post" action="{{ url_for('admin_panel.set_participants', slug=plan.slug) }}" id="teilnahme-{{ plan.slug }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"></form>{% endfor %}
+  <div class="m-matrix-wrap">
+    <table class="m-matrix">
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          {% for plan in plans %}<th scope="col"><a href="{{ url_for('plans.page', slug=plan.slug) }}">{{ plan.icon }} {{ plan.short or plan.title }}</a></th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for person in people if person.active %}
+        <tr>
+          <th scope="row">{{ person.name }}</th>
+          {% for plan in plans %}
+          <td><input type="checkbox" form="teilnahme-{{ plan.slug }}" name="uid" value="{{ person.id }}"
+                     aria-label="{{ person.name }} bei {{ plan.title }}" {% if person.id in plan.get('participants', []) %}checked{% endif %}></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th scope="row"></th>
+          {% for plan in plans %}<td><button class="m-button m-button-quiet m-small" type="submit" form="teilnahme-{{ plan.slug }}">Speichern</button></td>{% endfor %}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <p class="m-hint">Noch kein geplantes Tasting. Leg eins mit der +-Kachel auf der Startseite an.</p>
+  {% endif %}
+</section>
+
+<section class="m-card m-panel" id="tastings" aria-labelledby="tastings-titel">
+  <h2 id="tastings-titel" class="m-panel-title">Tastings auf der Startseite</h2>
+  <p class="m-hint">Abgehakt heißt sichtbar. Ausgeblendete Tastings verschwinden für Spieler ganz, auch unter ihrer Adresse. Ergebnisse, Termine und Punkte auf dem Tafelbild bleiben erhalten, bis du sie wieder zeigst.</p>
+  <form method="post" action="{{ url_for('admin_panel.set_hidden') }}" class="m-stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% for tasting in tastings %}
+    <label class="m-check"><input type="checkbox" name="shown" value="{{ tasting.slug }}" {% if not tasting.hidden %}checked{% endif %}> {{ tasting.icon }} {{ tasting.title }}</label>
+    {% endfor %}
+    <div><button class="m-button" type="submit">Speichern</button></div>
+  </form>
+</section>
+{% endblock %}

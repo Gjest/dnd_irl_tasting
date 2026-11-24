@@ -23,7 +23,7 @@ from flask import (
 )
 
 from . import images, stats
-from .web import admin_required, login_required, store
+from .web import admin_required, check_not_hidden, login_required, store
 from .store import validate_tasting
 from .catalog import (
     ADDICTION_TIERS,
@@ -49,11 +49,17 @@ MAX_SHOPPING_ITEMS = 80
 RESET_WORD = "ASCHE"
 
 
+@bp.before_request
+def hidden_from_players():
+    # Does nothing unless the admin hid the chips tasting (see /verwaltung).
+    check_not_hidden("chips")
+
+
 def players():
     return [
         {"id": uid, "name": u["name"]}
         for uid, u in store().users().items()
-        if u.get("role") == "player"
+        if u.get("role") == "player" and u.get("active", True)
     ]
 
 

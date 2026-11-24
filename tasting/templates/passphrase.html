@@ -1,0 +1,12 @@
+{% extends "master.html" %}
+{% block title %}Passphrase · Die Verkostungsgilde{% endblock %}
+{% block content %}
+<section class="m-scroll m-card">
+  <p class="m-eyebrow">{{ 'Neuer Login' if new else 'Neue Passphrase' }}</p>
+  <h1 class="m-title">{{ name }}</h1>
+  <p class="m-lead">Diese Passphrase wird nur jetzt angezeigt. Gib sie {{ name }} direkt weiter. Gespeichert wird nur ihr Fingerabdruck.</p>
+  <p class="m-passphrase" aria-label="Passphrase">{{ passphrase }}</p>
+  <p class="m-hint">Anmelden: auf der Login-Seite „{{ name }}“ wählen und diese Passphrase eingeben.{% if not new %} Alle bisherigen Anmeldungen von {{ name }} sind beendet.{% endif %}</p>
+  <p><a class="m-button" href="{{ url_for('admin_panel.page') }}#nutzer">Zurück zur Verwaltung</a></p>
+</section>
+{% endblock %}

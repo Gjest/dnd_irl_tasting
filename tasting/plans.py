@@ -129,6 +129,8 @@ def clean(template, slug):
         "scale": {"min": scale["min"], "max": scale["max"]},
         "sections": _keyed(sections),
         "created": date.today().isoformat(),
+        # Who takes part, set in /verwaltung. Not part of the template: a template is only the questions.
+        "participants": [],
     }
 
 
@@ -228,7 +230,9 @@ def upload():
 @login_required
 def page(slug):
     plan = _plan_or_404(slug)
-    return render_template("plan.html", plan=plan, types=TYPES, limits=LIMITS, count=question_count(plan))
+    users = store().users()
+    people = [users[uid]["name"] for uid in plan.get("participants", []) if uid in users]
+    return render_template("plan.html", plan=plan, types=TYPES, limits=LIMITS, count=question_count(plan), people=people)
 
 
 @bp.get("/plaene/<slug>/vorlage.json")

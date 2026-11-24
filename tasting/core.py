@@ -20,7 +20,8 @@ from flask import (
 
 from . import ideas, images, plans, results, security, views
 from .registry import TASTINGS
-from .web import admin_required, german_date, login_required, start_document, store, tasting_date, wants_json
+from .web import (admin_required, german_date, hidden_slugs, login_required, start_document, store, tasting_date,
+                  visible_tastings, wants_json)
 
 bp = Blueprint("core", __name__)
 
@@ -45,6 +46,8 @@ def login():
             error = "Zu viele Fehlversuche. Versuch es in fünf Minuten noch einmal."
         else:
             user = users.get(uid)
+            if user and not user.get("active", True):
+                user = None  # a deactivated login fails like an unknown one, after the same work
             ok = security.verify_passphrase(user["hash"] if user else security.DUMMY_HASH, attempt)
             if user and ok:
                 limiter.clear(ip, uid)
@@ -56,7 +59,7 @@ def login():
             limiter.record_failure(ip, uid)
             error = "Die Passphrase stimmt nicht."
     options = sorted(
-        ({"id": uid, "name": u["name"]} for uid, u in users.items()),
+        ({"id": uid, "name": u["name"]} for uid, u in users.items() if u.get("active", True)),
         key=lambda o: (o["id"] == "admin", o["name"].lower()),
     )
     return render_template("login.html", options=options, error=error), (401 if error else 200)
@@ -72,7 +75,7 @@ def logout():
 @login_required
 def landing():
     tiles = []
-    for tasting in TASTINGS:
+    for tasting in visible_tastings():
         if tasting["kind"] == "live":
             info = views.tile()
             href = url_for(tasting["endpoint"])
@@ -83,7 +86,8 @@ def landing():
         tiles.append({**tasting, **info, "href": href})
     view = request.cookies.get(VIEW_COOKIE)
     return render_template("landing.html", tiles=tiles, start=start_document().read(),
-                           view=view if view in VIEWS else "tafel", plans=plans.tiles(), ideas=ideas.tile())
+                           view=view if view in VIEWS else "tafel", plans=plans.tiles(), ideas=ideas.tile(),
+                           hidden=[t for t in TASTINGS if t["slug"] in hidden_slugs()])
 
 
 # The start page shows either the table picture or the tiles. The choice is
@@ -116,7 +120,8 @@ def german_date_filter(iso):
 def set_dates():
     """Saves the date of each tasting. An empty field falls back to the date its data brings."""
     changes = {}
-    for tasting in TASTINGS:
+    # Only the tastings on the form; a hidden one keeps its date.
+    for tasting in visible_tastings():
         value = request.form.get(f"date_{tasting['slug']}", "").strip()
         if value:
             try:
@@ -290,8 +295,11 @@ def set_table():
 @bp.post("/start/tafel/punkte")
 @admin_required
 def set_spots():
-    spots = {}
-    for tasting in TASTINGS:
+    # A hidden tasting keeps its spot, ready for when it comes back.
+    hidden = hidden_slugs()
+    spots = {slug: spot for slug, spot in ((start_document().read().get("table") or {}).get("spots") or {}).items()
+             if slug in hidden}
+    for tasting in visible_tastings():
         slug = tasting["slug"]
         if not request.form.get(f"spot_{slug}_x", "").strip():
             continue  # this tasting has no dish on the table

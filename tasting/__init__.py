@@ -52,7 +52,7 @@ def create_app(data_dir=None):
         if uid:
             user = store.users().get(uid)
             # The fingerprint logs people out when their passphrase is reset.
-            if user and session.get("fp") == user["hash"][-16:]:
+            if user and user.get("active", True) and session.get("fp") == user["hash"][-16:]:
                 g.user = {"id": uid, **{k: v for k, v in user.items() if k != "hash"}}
             else:
                 session.clear()
@@ -72,9 +72,10 @@ def create_app(data_dir=None):
             "user": g.get("user"),
         }
 
-    from . import core, ideas, plans, results, views
+    from . import admin_panel, core, ideas, plans, results, views
 
     app.register_blueprint(core.bp)
+    app.register_blueprint(admin_panel.bp)
     app.register_blueprint(plans.bp)
     app.register_blueprint(ideas.bp)
     # Each tasting lives below its own address. A new live tasting gets its own prefix.

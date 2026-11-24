@@ -11,17 +11,15 @@ import argparse
 import os
 import sys
 
-from . import security
+from . import accounts, security
+from .accounts import ADMIN_ID
 from .store import Store
 
-ADMIN_ID = "admin"
 DEFAULT_PLAYERS = "Der Lenny,Milka,Spargehirn,Waschschlappen,Rentier"
 
 
 def _create(users, uid, name, role):
-    passphrase = security.generate_passphrase()
-    users[uid] = {"name": name, "role": role, "hash": security.hash_passphrase(passphrase)}
-    return passphrase
+    return accounts.create(users, name, role, uid=uid)[1]
 
 
 def _print_table(created):
@@ -71,10 +69,10 @@ def main(argv=None):
         created.append((args.name, _create(users, uid, args.name, "player")))
     elif args.command == "reset":
         uid = _find(users, args.name)
-        created.append((users[uid]["name"], _create(users, uid, users[uid]["name"], users[uid]["role"])))
+        created.append((users[uid]["name"], accounts.reset(users, uid)))
     elif args.command == "list":
         for user in users.values():
-            print(f"{user['name']} ({user['role']})")
+            print(f"{user['name']} ({user['role']}{'' if accounts.is_active(user) else ', deaktiviert'})")
         return
 
     store.save_users(users)

@@ -5,6 +5,7 @@
 <p class="m-eyebrow"><a href="{{ url_for('core.landing') }}">Die Verkostungsgilde</a> · In Planung</p>
 <h1 class="m-title"><span aria-hidden="true">{{ plan.icon }}</span> {{ plan.title }}</h1>
 <p class="m-lead">{% if plan.tagline %}{{ plan.tagline }} · {% endif %}Kommt bald. {% if count %}{{ count }} Frage{{ '' if count == 1 else 'n' }} stehen schon fest.{% else %}Die Fragen fehlen noch.{% endif %}</p>
+<p class="m-hint">{% if people %}Dabei: {{ people|join(', ') }}{% else %}Noch niemand eingetragen{% endif %}{% if admin %} · <a href="{{ url_for('admin_panel.page') }}#teilnahme">Teilnahme bearbeiten</a>{% endif %}</p>
 
 {% for section in plan.sections %}
 {% set s = loop.index0 %}

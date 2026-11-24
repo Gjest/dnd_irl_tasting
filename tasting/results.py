@@ -12,7 +12,7 @@ from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_t
 
 from . import archive
 from .registry import TASTINGS, results_tasting
-from .web import admin_required, login_required, store, tasting_date
+from .web import admin_required, check_not_hidden, login_required, store, tasting_date
 
 bp = Blueprint("results", __name__)
 
@@ -21,6 +21,7 @@ def _tasting_or_404(slug):
     tasting = results_tasting(slug)
     if tasting is None:
         abort(404)
+    check_not_hidden(slug)
     return tasting
 
 
