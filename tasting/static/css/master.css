@@ -215,6 +215,7 @@ code { padding: .1em .35em; border-radius: 4px; background: rgba(0, 0, 0, .25); 
 .m-person { padding: .7rem 0; border-top: 1px solid rgba(226, 182, 92, .2); }
 .m-person.is-inactive .m-person-name { color: var(--muted); text-decoration: line-through; }
 .m-person-head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .6rem; }
+.m-person-head form { margin: 0 0 0 auto; }
 .m-person-name { font-weight: 700; font-size: 1.05rem; }
 .m-badge { padding: .05rem .55rem; font-size: .75rem; font-weight: 700; border-radius: 999px; border: 1px solid rgba(226, 182, 92, .45); color: var(--muted); }
 .m-badge-off { color: var(--danger); border-color: rgba(255, 138, 122, .5); }

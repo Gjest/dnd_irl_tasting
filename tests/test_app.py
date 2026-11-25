@@ -1196,9 +1196,11 @@ class Verwaltung(Base):
         self.assertIn('href="/wasser/"', page)
         for url in ("/cola/", "/chips/", "/chips/einkauf", "/cola/api/ergebnisse"):
             self.assertEqual(player.get(url).status_code, 404, url)
-        self.assertEqual(admin.get("/cola/").status_code, 200)
-        self.assertEqual(admin.get("/chips/admin").status_code, 200)
-        self.assertIn("Ausgeblendet:", admin.get("/").get_data(as_text=True))
+        # Removed means removed, for the admin too; /verwaltung lists them to bring back.
+        self.assertEqual(admin.get("/cola/").status_code, 404)
+        self.assertEqual(admin.get("/chips/admin").status_code, 404)
+        self.assertNotIn('href="/cola/"', admin.get("/").get_data(as_text=True))
+        self.assertIn("Zurückholen", admin.get("/verwaltung").get_data(as_text=True))
         # Saving dates and spots for what is shown keeps those of the hidden tastings.
         self.post(admin, "/start/daten", date_wasser="2026-08-16")
         self.post(admin, "/start/tafel/punkte", spot_wasser_x="60", spot_wasser_y="50", spot_wasser_r="5")
@@ -1208,6 +1210,34 @@ class Verwaltung(Base):
         self.post(admin, "/verwaltung/tastings", shown=["chips", "cola", "wasser"])
         self.assertEqual(player.get("/cola/").status_code, 200)
         self.assertIn('href="/chips/" class="m-spot"', player.get("/").get_data(as_text=True))
+
+    def test_samples_are_removed_and_brought_back_one_by_one(self):
+        admin, player = self.client("admin"), self.client("a")
+        self.post(admin, "/verwaltung/tastings/cola/entfernen")
+        self.post(admin, "/verwaltung/tastings/chips/entfernen")
+        self.assertEqual(self.store.document("start").read()["hidden"], ["cola", "chips"])
+        self.assertEqual(player.get("/cola/").status_code, 404)
+        self.post(admin, "/verwaltung/tastings/cola/zurueckholen")
+        self.assertEqual(self.store.document("start").read()["hidden"], ["chips"])
+        self.assertEqual(player.get("/cola/").status_code, 200)
+        self.assertEqual(self.post(admin, "/verwaltung/tastings/nope/entfernen").status_code, 404)
+        self.assertEqual(self.post(admin, "/verwaltung/tastings/cola/loeschen").status_code, 404)
+        self.assertEqual(self.post(player, "/verwaltung/tastings/wasser/entfernen").status_code, 403)
+
+    def test_container_word_at_creation_start_and_afterwards(self):
+        admin = self.client("admin")
+        self.post(admin, "/plaene/neu", title="Saft", vessel_one="Glas", vessel_many="")
+        plan = self.store.document("plans").read()["plans"][0]
+        self.assertEqual(plan["vessel"], {"one": "Glas", "many": "Gläser"})  # plural from the suggestions
+        self.post(admin, "/plaene/saft/abschnitt", title="A")
+        self.post(admin, "/plaene/saft/abschnitt/0/frage", label="Gut?", type="scale")
+        self.post(admin, "/plaene/saft/starten", vessel_one="Becher", vessel_many="")
+        plan = self.store.document("plans").read()["plans"][0]
+        self.assertEqual((plan["state"], plan["vessel"]), ("live", {"one": "Becher", "many": "Becher"}))
+        response = self.post(admin, "/plaene/saft/angaben", title="Saft", vessel_one="Kelch", vessel_many="Kelche")
+        self.assertEqual(response.headers["Location"], "/live/saft/admin")
+        self.assertIn("Die Kelche", admin.get("/live/saft/").get_data(as_text=True))
+        self.assertIn('list="vessel-list"', admin.get("/plaene/neu").get_data(as_text=True))
 
     def test_manage_list_shows_deactivated(self):
         users = self.store.users()

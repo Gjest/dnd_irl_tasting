@@ -97,14 +97,22 @@
 </section>
 
 <section class="m-card m-panel" id="tastings" aria-labelledby="tastings-titel">
-  <h2 id="tastings-titel" class="m-panel-title">Tastings auf der Startseite</h2>
-  <p class="m-hint">Abgehakt heißt sichtbar. Ausgeblendete Tastings verschwinden für Spieler ganz, auch unter ihrer Adresse. Ergebnisse, Termine und Punkte auf dem Tafelbild bleiben erhalten, bis du sie wieder zeigst.</p>
-  <form method="post" action="{{ url_for('admin_panel.set_hidden') }}" class="m-stack">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <h2 id="tastings-titel" class="m-panel-title">Muster-Tastings</h2>
+  <p class="m-hint">Diese drei kommen mit jeder Installation, als Beispiele. Brauchst du sie nicht, entferne sie: Dann sind sie für alle weg, von der Startseite, vom Tafelbild und unter ihrer Adresse. Ihre Daten bleiben als Sicherung liegen, „Zurückholen“ bringt alles wieder.</p>
+  <ul class="m-people">
     {% for tasting in tastings %}
-    <label class="m-check"><input type="checkbox" name="shown" value="{{ tasting.slug }}" {% if not tasting.hidden %}checked{% endif %}> {{ tasting.icon }} {{ tasting.title }}</label>
+    <li class="m-person{% if tasting.hidden %} is-inactive{% endif %}">
+      <div class="m-person-head">
+        <span class="m-person-name">{{ tasting.icon }} {{ tasting.title }}</span>
+        {% if tasting.hidden %}<span class="m-badge m-badge-off">entfernt</span>{% endif %}
+        <form method="post" action="{{ url_for('admin_panel.sample', slug=tasting.slug, action='zurueckholen' if tasting.hidden else 'entfernen') }}"
+              {% if not tasting.hidden %}data-confirm="{{ tasting.title }} von dieser Installation entfernen?"{% endif %}>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="m-link{% if not tasting.hidden %} m-danger{% endif %}" type="submit">{{ 'Zurückholen' if tasting.hidden else 'Entfernen' }}</button>
+        </form>
+      </div>
+    </li>
     {% endfor %}
-    <div><button class="m-button" type="submit">Speichern</button></div>
-  </form>
+  </ul>
 </section>
 {% endblock %}

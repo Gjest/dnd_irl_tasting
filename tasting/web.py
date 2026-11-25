@@ -28,8 +28,8 @@ def visible_tastings():
 
 
 def check_not_hidden(slug):
-    """A hidden tasting is gone for players; the admin still reaches it to look or bring it back."""
-    if slug in hidden_slugs() and g.get("user") and g.user["role"] != "admin":
+    """A removed sample tasting is gone for everyone; /verwaltung brings it back."""
+    if slug in hidden_slugs() and g.get("user"):
         abort(404)
 
 

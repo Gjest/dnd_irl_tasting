@@ -1,0 +1,9 @@
+{# What a tasting is served in. "Glas" alone is enough: the plural comes from the
+   list below, or from the second field for words the list doesn't know. #}
+{% macro vessel_fields(current, vessels, field_class='m-field', id='vessel') %}
+  <label class="{{ field_class }}"><span>Worin wird probiert?</span>
+    <input type="text" name="vessel_one" maxlength="24" list="{{ id }}-list" value="{{ current.one if current else 'Schale' }}" placeholder="Schale, Glas, Becher …"></label>
+  <label class="{{ field_class }}"><span>Mehrzahl (leer lassen bei den Vorschlägen)</span>
+    <input type="text" name="vessel_many" maxlength="24" value="{{ current.many if current and current.many != vessels.get(current.one) else '' }}" placeholder="{{ current.many if current else 'Schalen' }}"></label>
+  <datalist id="{{ id }}-list">{% for one in vessels %}<option value="{{ one }}">{% endfor %}</datalist>
+{% endmacro %}

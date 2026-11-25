@@ -141,6 +141,9 @@ def clean(template, slug):
 
 
 DEFAULT_VESSEL = {"one": "Schale", "many": "Schalen"}
+# Suggestions for the form, with their plurals, so "Glas" alone already gives "Gläser".
+VESSELS = {"Schale": "Schalen", "Glas": "Gläser", "Becher": "Becher", "Tasse": "Tassen", "Teller": "Teller",
+           "Schälchen": "Schälchen", "Flasche": "Flaschen", "Dose": "Dosen", "Löffel": "Löffel", "Probe": "Proben"}
 
 
 def clean_vessel(vessel):
@@ -148,7 +151,11 @@ def clean_vessel(vessel):
     vessel = vessel if isinstance(vessel, dict) else {}
     one = _text(vessel.get("one"), LIMITS["vessel"])
     many = _text(vessel.get("many"), LIMITS["vessel"])
-    return {"one": one, "many": many or one} if one else dict(DEFAULT_VESSEL)
+    return {"one": one, "many": many or VESSELS.get(one, one)} if one else dict(DEFAULT_VESSEL)
+
+
+def vessel_from_form(form):
+    return clean_vessel({"one": form.get("vessel_one"), "many": form.get("vessel_many")})
 
 
 def vessel(plan):
@@ -234,7 +241,7 @@ def _started(slug):
 @bp.get("/plaene/neu")
 @admin_required
 def new():
-    return render_template("plan_new.html", limits=LIMITS)
+    return render_template("plan_new.html", limits=LIMITS, vessels=VESSELS)
 
 
 @bp.post("/plaene/neu")
@@ -245,7 +252,7 @@ def create():
         flash("Gib dem Tasting einen Namen.")
         return redirect(url_for("plans.new"))
     slug = _add({"title": title, "short": request.form.get("short"), "icon": request.form.get("icon"),
-                 "tagline": request.form.get("tagline"), "sections": []})
+                 "tagline": request.form.get("tagline"), "sections": [], "vessel": vessel_from_form(request.form)})
     if slug is None:
         flash(f"Mehr als {MAX_PLANS} geplante Tastings passen nicht auf die Seite.")
         return redirect(url_for("core.landing"))
@@ -282,7 +289,8 @@ def page(slug):
     users = store().users()
     people = [users[uid]["name"] for uid in plan.get("participants", []) if uid in users]
     return render_template("plan.html", plan=plan, types=TYPES, limits=LIMITS, count=question_count(plan), people=people,
-                           vessel=vessel(plan), ranking=ranking_key(plan), scale_questions=scale_questions(plan))
+                           vessel=vessel(plan), ranking=ranking_key(plan), scale_questions=scale_questions(plan),
+                           vessels=VESSELS)
 
 
 @bp.get("/plaene/<slug>/vorlage.json")
@@ -306,11 +314,13 @@ def update(slug):
         plan["icon"] = _text(request.form.get("icon"), LIMITS["icon"]) or "✨"
         plan["tagline"] = _text(request.form.get("tagline"), LIMITS["tagline"])
         if "vessel_one" in request.form:
-            plan["vessel"] = clean_vessel({"one": request.form.get("vessel_one"), "many": request.form.get("vessel_many")})
+            plan["vessel"] = vessel_from_form(request.form)
         if "ranking" in request.form and state(plan) == "planned":
             plan["ranking"] = ranking_key({**plan, "ranking": request.form.get("ranking")}) or ""
+        running = state(plan) != "planned"
     flash("Gespeichert.")
-    return _back(slug)
+    # A running tasting is set up on its own admin page; the plan page leads there anyway.
+    return redirect(url_for("live.admin", slug=slug)) if running else _back(slug)
 
 
 @bp.post("/plaene/<slug>/abschnitt")
@@ -411,10 +421,14 @@ def start(slug):
     if not scale_questions(plan):
         flash("Ohne Skalenfrage gibt es keine Rangliste. Leg erst mindestens eine an.")
         return _back(slug)
-    live.create(plan)
     with _edit(slug) as entry:
+        # The start form asks once more what the tasting is served in.
+        if "vessel_one" in request.form:
+            entry["vessel"] = vessel_from_form(request.form)
         entry["state"] = "live"
         entry["ranking"] = ranking_key(entry)
+        plan = entry
+    live.create(plan)
     flash(f"„{plan['title']}“ läuft. Jetzt einkaufen und {vessel(plan)['many']} aufstellen.")
     return redirect(url_for("live.home", slug=slug))
 

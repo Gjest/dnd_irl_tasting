@@ -174,6 +174,23 @@ def set_participants(slug):
     return _back("#teilnahme")
 
 
+@bp.post("/verwaltung/tastings/<slug>/<action>")
+@admin_required
+def sample(slug, action):
+    """Takes one of the built-in tastings (chips, cola, water) off this install, or brings it back."""
+    tasting = next((t for t in TASTINGS if t["slug"] == slug), None)
+    if tasting is None or action not in ("entfernen", "zurueckholen"):
+        abort(404)
+    with start_document().edit() as data:
+        hidden = [h for h in data.get("hidden", []) if h != slug]
+        if action == "entfernen":
+            hidden.append(slug)
+        data["hidden"] = hidden
+    flash(f"{tasting['title']} ist entfernt. Unter „Muster-Tastings“ holst du es jederzeit zurück."
+          if action == "entfernen" else f"{tasting['title']} ist wieder da.")
+    return _back("#tastings")
+
+
 @bp.post("/verwaltung/tastings")
 @admin_required
 def set_hidden():

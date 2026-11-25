@@ -59,7 +59,7 @@ Below the tastings, "Was als Nächstes?" holds what is coming:
 - **Planned tastings** (`/plaene/<name>`): the admin starts one with the + tile, gives it a name and adds questions in sections, as scales (with words for both ends) or free text. It shows as "Bald" on the start page, and everyone can read its questions. "Vorlage herunterladen" saves the questions as a JSON file (`tasting-template/1`), which "Neues Tasting planen" takes in again.
 - **Starting one:** "Jetzt starten" on a planned tasting turns it into a running one under `/live/<name>/`, with the flow of the chips tasting:
   - **Shopping list:** free text (name, plus optional brand, variety or note, price and amount in g or ml). Who buys what, and whether it's bought.
-  - **Blind containers:** set up from the list with one tap and numbered. The plan says what they are called, e.g. Glas/Gläser. Only whoever set one up knows what is in it.
+  - **Blind containers:** set up from the list with one tap and numbered. What they are called (Schale, Glas, Becher …) is asked when the tasting is planned and again when it starts, and can be changed later on the tasting's admin page. Only whoever set one up knows what is in it.
   - **Rating:** the plan's questions, scales required, free text optional. The plan picks which scale question decides the ranking.
   - **Reveal and results:** the admin reveals worst first. The results page is the one cola and water use, with price per 100 g/ml and a value award.
 
@@ -90,7 +90,7 @@ As admin, "Verwaltung" in the header opens the admin panel (`/verwaltung`):
 
 - **Nutzer:** add a login (player or admin), give someone a new passphrase, rename, change the role, deactivate or delete. A new passphrase is shown once on the page that answers the form and is never stored. Deactivated logins can't sign in and drop out of the login list, but their name stays in old results. Only a login without any data can be deleted. Nobody can lock out themselves or the last active admin.
 - **Teilnahme:** who takes part in which planned tasting. Everyone logged in can still read every tasting. In the chips tasting all players take part, as before.
-- **Tastings auf der Startseite:** hide chips, cola or water, e.g. on a fresh install for another group. Hidden tastings disappear for players, also at their addresses. Their data, dates and table spots stay until they are shown again.
+- **Muster-Tastings:** chips, cola and water come with every install as samples. "Entfernen" takes one off this install: it disappears for everyone, admin included, from the start page, the table picture and its address. Its data, dates and table spots stay as a backup, and "Zurückholen" brings it all back.
 
 The same works from the command line:
 

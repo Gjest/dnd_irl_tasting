@@ -1,4 +1,5 @@
 {% extends "master.html" %}
+{% from "_vessel_fields.html" import vessel_fields %}
 {% block title %}Neues Tasting planen · Die Verkostungsgilde{% endblock %}
 {% block content %}
 <p class="m-eyebrow"><a href="{{ url_for('core.landing') }}">Die Verkostungsgilde</a> · Admin</p>
@@ -15,6 +16,7 @@
     <input type="text" name="icon" maxlength="{{ limits.icon }}" placeholder="☕"></label>
   <label class="m-field m-wide"><span>Untertitel (optional)</span>
     <input type="text" name="tagline" maxlength="{{ limits.tagline }}" placeholder="z. B. Vom Discounter bis zur Rösterei"></label>
+  {{ vessel_fields(none, vessels) }}
   <div class="m-wide"><button class="m-button" type="submit">Anlegen</button></div>
 </form>
 

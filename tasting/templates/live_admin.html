@@ -1,4 +1,5 @@
 {% extends "live_base.html" %}
+{% from "_vessel_fields.html" import vessel_fields %}
 {% block title %}Admin{% endblock %}
 {% block content %}
 <p class="eyebrow">{{ plan.title }} · Admin</p>
@@ -49,6 +50,20 @@
 {% else %}
 <p class="empty">Noch nichts aufgestellt.</p>
 {% endif %}
+
+<details class="card">
+  <summary>Name, Kachel und {{ word.many }}</summary>
+  <p class="hint">Gilt sofort überall, auch für schon Aufgestelltes. Die Fragen bleiben, wie sie beim Start waren.</p>
+  <form method="post" action="{{ url_for('plans.update', slug=plan.slug) }}" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field"><span>Name</span><input type="text" name="title" maxlength="80" required value="{{ plan.title }}"></label>
+    <label class="field"><span>Kurzname</span><input type="text" name="short" maxlength="24" value="{{ plan.short }}"></label>
+    <label class="field"><span>Symbol</span><input type="text" name="icon" maxlength="8" value="{{ plan.icon }}"></label>
+    <label class="field"><span>Untertitel</span><input type="text" name="tagline" maxlength="140" value="{{ plan.tagline }}"></label>
+    {{ vessel_fields(word, vessel_words, field_class='field') }}
+    <div><button class="button button-primary" type="submit">Speichern</button></div>
+  </form>
+</details>
 
 <details class="card">
   <summary>Daten</summary>

@@ -718,7 +718,7 @@ def admin():
                 "ratings": len(data["ratings"].get(v["id"], {}))}
                for v in sorted(data["vessels"], key=lambda v: v["number"])]
     ratings = sum(len(r) for r in data["ratings"].values())
-    return _page("live_admin.html", plan, data, vessels=vessels, ratings=ratings,
+    return _page("live_admin.html", plan, data, vessels=vessels, ratings=ratings, vessel_words=plans.VESSELS,
                  participants=_participants(plan), status=STATUS[data["phase"]])
 
 

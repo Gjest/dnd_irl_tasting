@@ -56,9 +56,6 @@
   {% endfor %}
 </nav>
 
-{% if user.role == 'admin' and hidden %}
-<p class="m-hint m-hidden-note">Ausgeblendet: {% for tasting in hidden %}{{ tasting.icon }} {{ tasting.title }}{{ ', ' if not loop.last }}{% endfor %} · <a href="{{ url_for('admin_panel.page') }}#tastings">in der Verwaltung wieder zeigen</a></p>
-{% endif %}
 
 <section aria-labelledby="next-title">
   <h2 id="next-title" class="m-section-title">Was als Nächstes?</h2>
