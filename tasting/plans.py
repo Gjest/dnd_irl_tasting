@@ -241,7 +241,10 @@ def _started(slug):
 @bp.get("/plaene/neu")
 @admin_required
 def new():
-    return render_template("plan_new.html", limits=LIMITS, vessels=VESSELS)
+    from . import catalog, samples
+
+    return render_template("plan_new.html", limits=LIMITS, vessels=VESSELS,
+                           samples=samples.templates(catalog.SECTIONS))
 
 
 @bp.post("/plaene/neu")
@@ -257,6 +260,28 @@ def create():
         flash(f"Mehr als {MAX_PLANS} geplante Tastings passen nicht auf die Seite.")
         return redirect(url_for("core.landing"))
     flash(f"„{title}“ ist angelegt. Jetzt kommen die Fragen.")
+    return _back(slug)
+
+
+@bp.post("/plaene/neu/muster/<name>")
+@admin_required
+def from_sample(name):
+    """A new plan with the questions of one of the group's first tastings, ready to edit."""
+    from . import catalog, samples
+
+    template = samples.templates(catalog.SECTIONS).get(name)
+    if template is None:
+        abort(404)
+    slug = _add(template)
+    if slug is None:
+        flash(f"Mehr als {MAX_PLANS} geplante Tastings passen nicht auf die Seite.")
+        return redirect(url_for("core.landing"))
+    with _edit(slug) as plan:
+        # Keys come from the labels, so the ranking question is found by its label.
+        plan["ranking"] = next((c["key"] for c in scale_questions(plan) if c["label"] == template["ranking_label"]),
+                               ranking_key(plan))
+    flash(f"„{template['title']}“ ist angelegt, mit {question_count(_plan_or_404(slug))} Fragen aus dem Muster. "
+          "Ändere sie, wie es zu euch passt.")
     return _back(slug)
 
 
@@ -433,13 +458,27 @@ def start(slug):
     return redirect(url_for("live.home", slug=slug))
 
 
+def remove(slug):
+    """Deletes a tasting of our own, planned or running, with everything it collected.
+
+    plans.json and a running tasting's file are backed up first (data/backups).
+    """
+    from . import live
+
+    plan = _plan_or_404(slug)
+    if state(plan) != "planned":
+        live.remove(slug)
+    document().snapshot()
+    with document().edit() as data:
+        data["plans"] = [p for p in data["plans"] if p["slug"] != slug]
+    return plan
+
+
 @bp.post("/plaene/<slug>/loeschen")
 @admin_required
 def delete(slug):
     if state(_plan_or_404(slug)) != "planned":
-        return redirect(url_for("live.admin", slug=slug))  # a running tasting is removed there, with its data
-    document().snapshot()
-    with document().edit() as data:
-        data["plans"] = [plan for plan in data["plans"] if plan["slug"] != slug]
-    flash("Geplantes Tasting entfernt. Eine Sicherung liegt unter data/backups.")
+        return redirect(url_for("live.admin", slug=slug))  # a running tasting asks for its name there
+    plan = remove(slug)
+    flash(f"„{plan['title']}“ ist gelöscht. Eine Sicherung liegt unter data/backups.")
     return redirect(url_for("core.landing"))

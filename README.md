@@ -57,6 +57,7 @@ Below the tastings, "Was als Nächstes?" holds what is coming:
 
 - **Ideensammlung** (`/ideen`): everyone adds ideas for the next tasting, just a name, and gives each idea one to five stars. Tapping your own rating again takes it back. The list is sorted by average stars. Whoever added an idea, and the admin, can remove it.
 - **Planned tastings** (`/plaene/<name>`): the admin starts one with the + tile, gives it a name and adds questions in sections, as scales (with words for both ends) or free text. It shows as "Bald" on the start page, and everyone can read its questions. "Vorlage herunterladen" saves the questions as a JSON file (`tasting-template/1`), which "Neues Tasting planen" takes in again.
+- **Samples:** "Neues Tasting planen" offers the questions of the chips, cola and water tastings as a start, as "Neue Chips-Verkostung" and so on. It is a normal planned tasting from then on, to edit as you like. This also works after the built-in tastings are deleted.
 - **Starting one:** "Jetzt starten" on a planned tasting turns it into a running one under `/live/<name>/`, with the flow of the chips tasting:
   - **Shopping list:** free text (name, plus optional brand, variety or note, price and amount in g or ml). Who buys what, and whether it's bought.
   - **Blind containers:** set up from the list with one tap and numbered. What they are called (Schale, Glas, Becher …) is asked when the tasting is planned and again when it starts, and can be changed later on the tasting's admin page. Only whoever set one up knows what is in it.
@@ -90,7 +91,7 @@ As admin, "Verwaltung" in the header opens the admin panel (`/verwaltung`):
 
 - **Nutzer:** add a login (player or admin), give someone a new passphrase, rename, change the role, deactivate or delete. A new passphrase is shown once on the page that answers the form and is never stored. Deactivated logins can't sign in and drop out of the login list, but their name stays in old results. Only a login without any data can be deleted. Nobody can lock out themselves or the last active admin.
 - **Teilnahme:** who takes part in which planned tasting. Everyone logged in can still read every tasting. In the chips tasting all players take part, as before.
-- **Muster-Tastings:** chips, cola and water come with every install as samples. "Entfernen" takes one off this install: it disappears for everyone, admin included, from the start page, the table picture and its address. Its data, dates and table spots stay as a backup, and "Zurückholen" brings it all back.
+- **Tastings:** every tasting of this install in one list, built-in (chips, cola, water), planned, running and finished, each with its status and "Löschen". Deleting is final: data and photos go, only a copy of the data stays in `data/backups/`. A tasting that already has data asks for its name to be typed first. The built-in ones can also just be hidden for a while ("Ausblenden", "Zurückholen"). A deleted built-in tasting only comes back from the command line, empty: `docker compose exec app python -m tasting.manage muster-zurueckholen cola`, then restart the container.
 
 The same works from the command line:
 

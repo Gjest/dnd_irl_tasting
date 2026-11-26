@@ -10,7 +10,7 @@ import unittest
 
 from PIL import Image
 
-from tasting import archive, create_app, security, stats
+from tasting import archive, create_app, plans, security, stats
 from tasting.catalog import SCALE_KEYS
 from tasting.manage import main as manage_main
 from tasting.store import Store
@@ -1221,7 +1221,7 @@ class Verwaltung(Base):
         self.assertEqual(self.store.document("start").read()["hidden"], ["chips"])
         self.assertEqual(player.get("/cola/").status_code, 200)
         self.assertEqual(self.post(admin, "/verwaltung/tastings/nope/entfernen").status_code, 404)
-        self.assertEqual(self.post(admin, "/verwaltung/tastings/cola/loeschen").status_code, 404)
+        self.assertEqual(self.post(admin, "/verwaltung/tastings/cola/verbrennen").status_code, 404)
         self.assertEqual(self.post(player, "/verwaltung/tastings/wasser/entfernen").status_code, 403)
 
     def test_container_word_at_creation_start_and_afterwards(self):
@@ -1238,6 +1238,102 @@ class Verwaltung(Base):
         self.assertEqual(response.headers["Location"], "/live/saft/admin")
         self.assertIn("Die Kelche", admin.get("/live/saft/").get_data(as_text=True))
         self.assertIn('list="vessel-list"', admin.get("/plaene/neu").get_data(as_text=True))
+
+    def test_one_list_of_every_tasting(self):
+        admin = self.client("admin")
+        self.post(admin, "/plaene/neu", title="Kaffee")
+        self.post(admin, "/plaene/neu/muster/cola")
+        self.post(admin, "/plaene/neue-cola-verkostung/starten")
+        page = admin.get("/verwaltung").get_data(as_text=True)
+        for text in ("Blutkrieg der Chips", "Cola-Verkostung", "Wasser-Verkostung", "Kaffee", "Geplant", "Läuft", "mitgeliefert"):
+            self.assertIn(text, page)
+        self.assertIn('href="/live/neue-cola-verkostung/admin"', page)
+        self.assertEqual(self.client("a").get("/verwaltung").status_code, 403)
+        self.assertEqual(self.post(self.client("a"), "/verwaltung/tastings/kaffee/loeschen").status_code, 403)
+
+    def test_deleting_planned_and_running_tastings_from_the_list(self):
+        admin = self.client("admin")
+        self.post(admin, "/plaene/neu", title="Kaffee")
+        self.post(admin, "/verwaltung/tastings/kaffee/loeschen")
+        self.assertEqual(self.store.document("plans").read()["plans"], [])
+        self.assertTrue(any(f.startswith("plans-") for f in os.listdir(os.path.join(self.tmp.name, "backups"))))
+        # A running one with purchases asks for its name.
+        self.post(admin, "/plaene/neu/muster/wasser")
+        self.post(admin, "/verwaltung/teilnahme/neue-wasser-verkostung", uid=["admin"])
+        self.post(admin, "/plaene/neue-wasser-verkostung/starten")
+        self.post(admin, "/live/neue-wasser-verkostung/einkauf", name="Leitungswasser", buyer="me")
+        self.post(admin, "/verwaltung/tastings/neue-wasser-verkostung/loeschen")
+        self.post(admin, "/verwaltung/tastings/neue-wasser-verkostung/loeschen", confirm="Kaffee")
+        self.assertTrue(self.store.document("live-neue-wasser-verkostung").exists())
+        self.post(admin, "/verwaltung/tastings/neue-wasser-verkostung/loeschen", confirm="Neue Wasser-Verkostung")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "live-neue-wasser-verkostung.json")))
+        self.assertTrue(any(f.startswith("live-neue-wasser-verkostung-") for f in os.listdir(os.path.join(self.tmp.name, "backups"))))
+        self.assertEqual(admin.get("/live/neue-wasser-verkostung/").status_code, 404)
+        self.assertEqual(self.post(admin, "/verwaltung/tastings/nope/loeschen").status_code, 404)
+
+    def test_deleting_the_built_in_tastings_for_good(self):
+        admin, player = self.client("admin"), self.client("a")
+        admin.post("/cola/einspielen", data={"csrf_token": self.token(admin), "file": (io.BytesIO(json.dumps(small_archive()).encode()), "c.json")},
+                   content_type="multipart/form-data")
+        self.assertTrue(self.store.document("cola").exists())
+        self.post(admin, "/start/daten", date_cola="2026-02-14")
+        self.post(admin, "/verwaltung/tastings/cola/loeschen")  # has data: needs the name
+        self.assertTrue(self.store.document("cola").exists())
+        self.post(admin, "/verwaltung/tastings/cola/loeschen", confirm="Cola-Verkostung")
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "cola.json")))
+        self.assertTrue(any(f.startswith("cola-") for f in os.listdir(os.path.join(self.tmp.name, "backups"))))
+        self.assertEqual(self.store.document("start").read()["deleted"], ["cola"])
+        for client in (admin, player):
+            self.assertEqual(client.get("/cola/").status_code, 404)
+            self.assertNotIn('href="/cola/"', client.get("/").get_data(as_text=True))
+        verwaltung = admin.get("/verwaltung").get_data(as_text=True)
+        self.assertNotIn("Cola-Verkostung", verwaltung.split('id="tastings"')[1])
+        self.assertNotIn("date_cola", admin.get("/").get_data(as_text=True))
+        # Chips with bowls and photos: emptied, its photos gone, a backup kept.
+        self.upload(admin, "/chips/chips", name="Geheimchip", brand="Funny", flavor_type="Paprika")
+        photo = self.store.read()["chips"][0]["image"]
+        self.post(admin, "/verwaltung/tastings/chips/loeschen", confirm="blutkrieg der chips")
+        self.assertEqual((self.store.read()["chips"], self.store.read()["shopping"]), ([], []))
+        self.assertFalse(os.path.exists(os.path.join(self.tmp.name, "images", photo)))
+        self.assertEqual(player.get("/chips/").status_code, 404)
+        self.assertEqual(admin.get("/chips/admin").status_code, 404)
+        # Water without data goes with a simple confirm.
+        self.post(admin, "/verwaltung/tastings/wasser/loeschen")
+        self.assertEqual(self.store.document("start").read()["deleted"], ["cola", "chips", "wasser"])
+        self.assertIn("Was als Nächstes?", player.get("/").get_data(as_text=True))
+        # Only the command line brings one back, empty.
+        os.environ["DATA_DIR"] = self.tmp.name
+        self.addCleanup(os.environ.pop, "DATA_DIR", None)
+        with contextlib.redirect_stdout(io.StringIO()):
+            manage_main(["muster-zurueckholen", "cola"])
+        restarted = create_app(self.tmp.name)
+        self.assertEqual(restarted.extensions["store"].document("start").read()["deleted"], ["chips", "wasser"])
+
+    def test_samples_start_new_plans(self):
+        admin = self.client("admin")
+        self.assertIn("Oder mit einem Muster anfangen", admin.get("/plaene/neu").get_data(as_text=True))
+        for name, slug, vessel, ranking in (("chips", "neue-chips-verkostung", "Schale", "persoenlicher_genuss"),
+                                           ("cola", "neue-cola-verkostung", "Glas", "persoenlicher_genussfaktor"),
+                                           ("wasser", "neue-wasser-verkostung", "Glas", "persoenlicher_genuss")):
+            response = self.post(admin, f"/plaene/neu/muster/{name}")
+            self.assertEqual(response.headers["Location"], f"/plaene/{slug}")
+            plan = next(p for p in self.store.document("plans").read()["plans"] if p["slug"] == slug)
+            self.assertEqual((plan["vessel"]["one"], plan["ranking"]), (vessel, ranking))
+            self.assertGreater(sum(len(s["criteria"]) for s in plan["sections"]), 10)
+            self.assertIsNone(plans.validate(plans.export(plan)))
+        self.assertEqual(self.post(admin, "/plaene/neu/muster/bier").status_code, 404)
+        self.assertEqual(self.post(self.client("a"), "/plaene/neu/muster/cola").status_code, 403)
+        # A sample runs straight away.
+        self.post(admin, "/verwaltung/teilnahme/neue-cola-verkostung", uid=["a"])
+        self.post(admin, "/plaene/neue-cola-verkostung/starten")
+        alice = self.client("a")
+        self.post(alice, "/live/neue-cola-verkostung/einkauf", name="Cola", buyer="me")
+        item = self.store.document("live-neue-cola-verkostung").read()["items"][0]
+        self.post(alice, f"/live/neue-cola-verkostung/einkauf/{item['id']}/aufstellen")
+        glass = self.store.document("live-neue-cola-verkostung").read()["vessels"][0]
+        keys = [c["key"] for s in self.store.document("live-neue-cola-verkostung").read()["sections"] for c in s["criteria"]]
+        self.post(alice, f"/live/neue-cola-verkostung/gefaess/{glass['id']}", **{f"score_{k}": "3" for k in keys})
+        self.assertEqual(len(self.store.document("live-neue-cola-verkostung").read()["ratings"][glass["id"]]["a"]["scores"]), len(keys))
 
     def test_manage_list_shows_deactivated(self):
         users = self.store.users()

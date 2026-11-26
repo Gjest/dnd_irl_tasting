@@ -5,6 +5,9 @@ are never written to disk or to the server logs.
   python -m tasting.manage add "Name"      add a player
   python -m tasting.manage reset "Name"    give someone a new passphrase
   python -m tasting.manage list            show who has a login
+  python -m tasting.manage muster-zurueckholen cola
+                                           bring back a deleted built-in tasting (chips, cola, wasser);
+                                           its data comes back by hand from data/backups
 """
 
 import argparse
@@ -40,13 +43,35 @@ def _find(users, name):
     sys.exit(f"Kein Login für '{name}'. Vorhanden: {', '.join(u['name'] for u in users.values())}")
 
 
+def _restore_sample(slug):
+    """Removes a built-in tasting's "deleted" mark in start.json, so it shows up again (empty)."""
+    import json
+
+    from .registry import BY_SLUG
+    from .store import write_json_atomic
+
+    if slug not in BY_SLUG:
+        sys.exit(f"Kein mitgeliefertes Tasting '{slug}'. Vorhanden: {', '.join(BY_SLUG)}")
+    path = Store(os.environ.get("DATA_DIR", "./data")).data_dir / "start.json"
+    start = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    if slug not in start.get("deleted", []):
+        print(f"'{slug}' ist nicht gelöscht.")
+        return
+    start["deleted"] = [d for d in start["deleted"] if d != slug]
+    write_json_atomic(path, start)
+    print(f"'{slug}' ist wieder da, ohne Daten. Ältere Daten liegen unter data/backups. "
+          "Danach den Container neu starten, damit die App die Änderung liest.")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["init", "add", "reset", "list"])
+    parser.add_argument("command", choices=["init", "add", "reset", "list", "muster-zurueckholen"])
     parser.add_argument("name", nargs="?")
     args = parser.parse_args(argv)
-    if args.command in ("add", "reset") and not args.name:
+    if args.command in ("add", "reset", "muster-zurueckholen") and not args.name:
         parser.error(f"{args.command} braucht einen Namen")
+    if args.command == "muster-zurueckholen":
+        return _restore_sample(args.name)
 
     store = Store(os.environ.get("DATA_DIR", "./data"))
     users = store.users()

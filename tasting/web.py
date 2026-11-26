@@ -22,14 +22,25 @@ def hidden_slugs():
     return set(start_document().read().get("hidden", []))
 
 
+def deleted_slugs():
+    """Built-in tastings this install deleted for good. Only `manage.py muster-zurueckholen` undoes it."""
+    return set(start_document().read().get("deleted", []))
+
+
+def installed_tastings():
+    """The built-in tastings this install still has, shown or hidden."""
+    deleted = deleted_slugs()
+    return [tasting for tasting in TASTINGS if tasting["slug"] not in deleted]
+
+
 def visible_tastings():
-    hidden = hidden_slugs()
-    return [tasting for tasting in TASTINGS if tasting["slug"] not in hidden]
+    gone = hidden_slugs() | deleted_slugs()
+    return [tasting for tasting in TASTINGS if tasting["slug"] not in gone]
 
 
 def check_not_hidden(slug):
-    """A removed sample tasting is gone for everyone; /verwaltung brings it back."""
-    if slug in hidden_slugs() and g.get("user"):
+    """A hidden or deleted built-in tasting is gone for everyone; /verwaltung brings a hidden one back."""
+    if (slug in hidden_slugs() or slug in deleted_slugs()) and g.get("user"):
         abort(404)
 
 

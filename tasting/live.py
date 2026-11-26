@@ -779,9 +779,6 @@ def delete():
     if request.form.get("confirm", "").strip().casefold() != plan["title"].casefold():
         flash("Zum Löschen den Namen des Tastings genau eintippen.")
         return redirect(url_for("live.admin"))
-    remove(plan["slug"])
-    plans.document().snapshot()
-    with plans.document().edit() as stored:
-        stored["plans"] = [p for p in stored["plans"] if p["slug"] != plan["slug"]]
+    plans.remove(plan["slug"])
     flash(f"„{plan['title']}“ ist gelöscht. Eine Sicherung liegt unter data/backups.")
     return redirect(url_for("core.landing"))

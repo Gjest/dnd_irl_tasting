@@ -97,21 +97,45 @@
 </section>
 
 <section class="m-card m-panel" id="tastings" aria-labelledby="tastings-titel">
-  <h2 id="tastings-titel" class="m-panel-title">Muster-Tastings</h2>
-  <p class="m-hint">Diese drei kommen mit jeder Installation, als Beispiele. Brauchst du sie nicht, entferne sie: Dann sind sie für alle weg, von der Startseite, vom Tafelbild und unter ihrer Adresse. Ihre Daten bleiben als Sicherung liegen, „Zurückholen“ bringt alles wieder.</p>
-  <ul class="m-people">
-    {% for tasting in tastings %}
-    <li class="m-person{% if tasting.hidden %} is-inactive{% endif %}">
+  <h2 id="tastings-titel" class="m-panel-title">Tastings</h2>
+  <p class="m-hint">Alle Tastings dieser Installation. Löschen ist endgültig: Daten und Fotos sind danach weg, nur eine Sicherung der Daten bleibt unter <code>data/backups</code>. Wer die mitgelieferten Tastings (Chips, Cola, Wasser) nur kurz nicht sehen will, blendet sie aus. Ihre Fragen gibt es außerdem immer als Muster unter <a href="{{ url_for('plans.new') }}">Neues Tasting planen</a>.</p>
+  <ul class="m-people m-tastings">
+    {% for t in tastings %}
+    <li class="m-person{% if t.hidden %} is-inactive{% endif %}">
       <div class="m-person-head">
-        <span class="m-person-name">{{ tasting.icon }} {{ tasting.title }}</span>
-        {% if tasting.hidden %}<span class="m-badge m-badge-off">entfernt</span>{% endif %}
-        <form method="post" action="{{ url_for('admin_panel.sample', slug=tasting.slug, action='zurueckholen' if tasting.hidden else 'entfernen') }}"
-              {% if not tasting.hidden %}data-confirm="{{ tasting.title }} von dieser Installation entfernen?"{% endif %}>
+        <span class="m-person-name">{{ t.icon }} {% if t.href %}<a href="{{ t.href }}">{{ t.title }}</a>{% else %}{{ t.title }}{% endif %}</span>
+        <span class="m-badge{% if t.hidden %} m-badge-off{% endif %}">{{ t.status }}</span>
+        {% if t.kind == 'builtin' %}<span class="m-badge">mitgeliefert</span>{% endif %}
+        {% if t.kind != 'builtin' %}<span class="m-hint">{{ t.people }} dabei</span>{% endif %}
+      </div>
+      <div class="m-actions">
+        {% if t.admin_href %}<a href="{{ t.admin_href }}">Admin</a>{% endif %}
+        {% if t.kind == 'builtin' %}
+        <form method="post" action="{{ url_for('admin_panel.sample', slug=t.slug, action='zurueckholen' if t.hidden else 'ausblenden') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="m-link{% if not tasting.hidden %} m-danger{% endif %}" type="submit">{{ 'Zurückholen' if tasting.hidden else 'Entfernen' }}</button>
+          <button class="m-link" type="submit">{{ 'Zurückholen' if t.hidden else 'Ausblenden' }}</button>
         </form>
+        {% endif %}
+        {% if t.has_data %}
+        <details class="m-delete">
+          <summary class="m-danger">Löschen</summary>
+          <form method="post" action="{{ url_for('admin_panel.delete_tasting', slug=t.slug) }}" class="m-inline-row">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <label class="m-field"><span>Hat schon Daten. Zum Löschen „{{ t.title }}“ eintippen:</span>
+              <input type="text" name="confirm" autocomplete="off" required></label>
+            <button class="m-button m-button-quiet m-small" type="submit">Endgültig löschen</button>
+          </form>
+        </details>
+        {% else %}
+        <form method="post" action="{{ url_for('admin_panel.delete_tasting', slug=t.slug) }}" data-confirm="„{{ t.title }}“ endgültig löschen?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="m-link m-danger" type="submit">Löschen</button>
+        </form>
+        {% endif %}
       </div>
     </li>
+    {% else %}
+    <li class="empty m-hint">Keine Tastings. Leg eins über die +-Kachel auf der Startseite an.</li>
     {% endfor %}
   </ul>
 </section>

@@ -28,6 +28,7 @@ The group has tasted cola (Google Forms), water (a Spring app) and chips (this a
 | `store.py` → `JsonDocument` | One JSON file in memory, atomic writes, rolling backups, `replace()` with a backup first | `tasting.json` for chips, `<slug>.json` for every other tasting |
 | `images.py` | Re-encodes uploaded photos, `save_from_form()` for the camera and file buttons | Bowls, list items and start page photos (`data/start.json`) |
 | `web.py` | `store()`, `login_required`, `admin_required`, `visible_tastings()`, `check_not_hidden()` | Every blueprint |
+| `samples.py` | The questions of chips, cola and water as plan templates; imports nothing from the app | "Neues Tasting planen" and `tools/archive_cola_water.py` |
 | `accounts.py` | Logins: create, reset, the guards for the last admin; `"active": false` in `users.json` | `manage.py` and the admin panel |
 | `archive.py` | Checks a results file and computes ranking, awards, groups, people, twins, flags and notes | `results.py` |
 | `static/js/report.js` | Bars, tables, heat maps, taste twins, chart colors read from the theme | Chips results and every results page |
@@ -96,6 +97,10 @@ A finished tasting is one JSON file that brings its own questions along. The res
 6. **Table picture:** if the start page has one, mark the new tasting's dish under "Tafelbild". `short` is the name in the links below the picture. Until then the tasting is still reachable through the links below the picture and in the tile view.
 
 No new Python code is needed. Routes, upload, download, backups and the results page come from `results.py`.
+
+### Deleting and hiding
+
+`/verwaltung` lists every tasting. Our own ones (planned or running) are deleted with `plans.remove()`, which also removes a running tasting's file and photos (`live.remove()`); both are backed up first. The built-in tastings live in the code, so deleting one empties its data (backed up) and adds its slug to `deleted` in `data/start.json`; `web.visible_tastings()` and `check_not_hidden()` then leave it out everywhere and answer 404. `hidden` in the same file is the reversible variant. `manage.py muster-zurueckholen <slug>` removes the `deleted` mark.
 
 ### From a planned tasting
 

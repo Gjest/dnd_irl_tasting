@@ -6,9 +6,10 @@ once, on the page that answers the form, and is never stored, flashed or logged.
 
 from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
-from . import accounts, ideas, plans
+from . import accounts, ideas, images, live, plans, results, views
 from .registry import TASTINGS
-from .web import admin_required, hidden_slugs, start_document, store
+from .store import _empty_tasting
+from .web import admin_required, hidden_slugs, installed_tastings, start_document, store
 
 bp = Blueprint("admin_panel", __name__)
 
@@ -50,15 +51,92 @@ def page():
          for uid, u in users.items()),
         key=lambda p: (not p["active"], p["role"] != "admin", p["name"].lower()),
     )
-    hidden = hidden_slugs()
     return render_template(
         "verwaltung.html",
         people=people,
         roles=accounts.ROLES,
         max_name=accounts.MAX_NAME,
         plans=plans.document().read()["plans"],
-        tastings=[{**t, "hidden": t["slug"] in hidden} for t in TASTINGS],
+        tastings=_all_tastings(),
     )
+
+
+# --- Every tasting of this install -------------------------------------------------
+
+
+def _builtin_has_data(slug):
+    if slug == "chips":
+        data = store().read()
+        return bool(data["chips"] or data["ratings"] or data["shopping"])
+    return store().document(slug).exists()
+
+
+def _all_tastings():
+    """One row per tasting: the built-in ones this install kept, then our own, planned or running."""
+    hidden = hidden_slugs()
+    rows = []
+    for tasting in installed_tastings():
+        slug = tasting["slug"]
+        info = views.tile() if tasting["kind"] == "live" else results.tile(tasting)
+        rows.append({
+            "slug": slug, "title": tasting["title"], "icon": tasting["icon"], "kind": "builtin",
+            "status": "ausgeblendet" if slug in hidden else info["status"],
+            "hidden": slug in hidden, "has_data": _builtin_has_data(slug),
+            "href": None if slug in hidden else (url_for(tasting["endpoint"]) if tasting["kind"] == "live"
+                                                 else url_for("results.page", slug=slug)),
+        })
+    running = {plan["slug"]: data for plan, data in live.running()}
+    for plan in plans.document().read()["plans"]:
+        slug = plan["slug"]
+        data = running.get(slug)
+        rows.append({
+            "slug": slug, "title": plan["title"], "icon": plan.get("icon", "✨"),
+            "kind": "live" if data else "planned",
+            "status": live.STATUS[data["phase"]] if data else "Geplant",
+            "people": len(plan.get("participants", [])),
+            "has_data": bool(data and (data["items"] or data["vessels"] or data["ratings"])),
+            "href": url_for("live.home", slug=slug) if data else url_for("plans.page", slug=slug),
+            "admin_href": url_for("live.admin", slug=slug) if data else None,
+        })
+    return rows
+
+
+def _delete_builtin(tasting):
+    """Deletes a built-in tasting for good: its data (backed up first) and its place in the app."""
+    slug = tasting["slug"]
+    if slug == "chips":
+        old = store().read()
+        store().snapshot()
+        store().replace(_empty_tasting())
+        photos = [e.get("image") for e in old["chips"] + old["shopping"]]
+        images.discard(store().images_dir, photos, store().read())
+    else:
+        document = store().document(slug)
+        if document.exists():
+            document.snapshot()
+            document.path.unlink(missing_ok=True)
+        store().forget(slug)
+    with start_document().edit() as data:
+        data["hidden"] = [h for h in data.get("hidden", []) if h != slug]
+        data["deleted"] = [d for d in data.get("deleted", []) if d != slug] + [slug]
+
+
+@bp.post("/verwaltung/tastings/<slug>/loeschen")
+@admin_required
+def delete_tasting(slug):
+    """Deletes any tasting from the list. One with data asks for its name to be typed."""
+    row = next((r for r in _all_tastings() if r["slug"] == slug), None)
+    if row is None:
+        abort(404)
+    if row["has_data"] and request.form.get("confirm", "").strip().casefold() != row["title"].casefold():
+        flash(f"Zum Löschen von „{row['title']}“ den Namen genau eintippen. Nichts gelöscht.")
+        return _back("#tastings")
+    if row["kind"] == "builtin":
+        _delete_builtin(next(t for t in TASTINGS if t["slug"] == slug))
+    else:
+        plans.remove(slug)
+    flash(f"„{row['title']}“ ist gelöscht. Eine Sicherung der Daten liegt unter data/backups.")
+    return _back("#tastings")
 
 
 @bp.post("/verwaltung/nutzer")
@@ -177,17 +255,18 @@ def set_participants(slug):
 @bp.post("/verwaltung/tastings/<slug>/<action>")
 @admin_required
 def sample(slug, action):
-    """Takes one of the built-in tastings (chips, cola, water) off this install, or brings it back."""
-    tasting = next((t for t in TASTINGS if t["slug"] == slug), None)
-    if tasting is None or action not in ("entfernen", "zurueckholen"):
+    """Hides one of the built-in tastings (chips, cola, water) for a while, or brings it back."""
+    tasting = next((t for t in installed_tastings() if t["slug"] == slug), None)
+    if tasting is None or action not in ("ausblenden", "entfernen", "zurueckholen"):
         abort(404)
+    hide = action != "zurueckholen"
     with start_document().edit() as data:
         hidden = [h for h in data.get("hidden", []) if h != slug]
-        if action == "entfernen":
+        if hide:
             hidden.append(slug)
         data["hidden"] = hidden
-    flash(f"{tasting['title']} ist entfernt. Unter „Muster-Tastings“ holst du es jederzeit zurück."
-          if action == "entfernen" else f"{tasting['title']} ist wieder da.")
+    flash(f"{tasting['title']} ist ausgeblendet, die Daten bleiben. „Zurückholen“ bringt es wieder."
+          if hide else f"{tasting['title']} ist wieder da.")
     return _back("#tastings")
 
 

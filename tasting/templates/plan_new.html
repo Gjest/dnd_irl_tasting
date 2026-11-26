@@ -20,6 +20,23 @@
   <div class="m-wide"><button class="m-button" type="submit">Anlegen</button></div>
 </form>
 
+<h2 class="m-section-title">Oder mit einem Muster anfangen</h2>
+<div class="m-card">
+  <p class="m-hint">Die Fragen unserer ersten Verkostungen als Startpunkt. Danach ist es ein ganz normales geplantes Tasting: Fragen ändern, ergänzen, löschen, wie es zu euch passt.</p>
+  <div class="m-samples">
+    {% for name, sample in samples.items() %}
+    <form method="post" action="{{ url_for('plans.from_sample', name=name) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="m-sample" type="submit">
+        <span class="m-sample-icon" aria-hidden="true">{{ sample.icon }}</span>
+        <span class="m-sample-name">{{ sample.short }}</span>
+        <span class="m-sample-facts">{{ sample.sections|sum(attribute='criteria', start=[])|length }} Fragen · {{ sample.vessel.many }}</span>
+      </button>
+    </form>
+    {% endfor %}
+  </div>
+</div>
+
 <h2 class="m-section-title">Oder eine Vorlage einspielen</h2>
 <form method="post" action="{{ url_for('plans.upload') }}" enctype="multipart/form-data" class="m-card m-stack">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

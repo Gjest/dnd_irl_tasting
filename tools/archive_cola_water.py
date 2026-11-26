@@ -11,13 +11,13 @@ next to the exports and out of git.
 import json
 import re
 import sys
+from pathlib import Path
 from statistics import mean
 
-AWAY, STRONG = "nicht wahrnehmbar", "dominant"
-
-
-def crit(key, label, low, high):
-    return {"key": key, "label": label, "low": low, "high": high}
+# The questions live in the app, where "Neues Tasting planen" offers them as samples.
+# samples.py imports nothing from the app, so it loads here without Flask.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tasting"))
+from samples import COLA_SECTIONS, WATER_SECTIONS  # noqa: E402
 
 
 def cola(path):
@@ -52,29 +52,7 @@ def cola(path):
         "ranking": "genuss",
         "tiebreak": "harmonie",
         "group_label": "Zero gegen Zucker",
-        "sections": [
-            {"title": "Das Auge", "criteria": [
-                crit("farbe", "Farbintensität", "Helles Kastanienbraun", "Tiefes Schwarz"),
-                crit("fenster", "Fenster", "wässrig ohne Rückstände", "sirupartige Schlieren"),
-                crit("krone", "Krone", "Nicht vorhanden", "Stabiler Schaum")]},
-            {"title": "Die Nase", "criteria": [
-                crit("zitrus", "Zitrus", AWAY, STRONG), crit("zimt", "Zimt", AWAY, STRONG),
-                crit("nelke", "Nelke", AWAY, STRONG), crit("kraeuter", "Kräuter", AWAY, STRONG)]},
-            {"title": "Der Gaumen", "criteria": [
-                crit("carb", "Carbonisierung", "Feinperlig, cremig", "Stark spritzig"),
-                crit("suesse", "Süße", "Herb, dezent", "Süß, klebrig"),
-                crit("saeure", "Säure", "mild, stumpf", "pointiert, sauer"),
-                crit("zitrone", "Zitronen-Noten", AWAY, STRONG), crit("limette", "Limetten-Noten", AWAY, STRONG),
-                crit("orange", "Orangen-Noten", AWAY, STRONG), crit("beere", "Beeren-Noten", AWAY, STRONG),
-                crit("bitter", "Bitterkeit", AWAY, STRONG)]},
-            {"title": "Der Abgang", "criteria": [
-                crit("koerper", "Körper", "Dünn", "Vollmundig"),
-                crit("zahn", "Zahn-Gefühl", "glatt", "pelzig stumpf"),
-                crit("nachhall", "Nachhall", "kurzweilig", "anhaltend")]},
-            {"title": "Gesamtbewertung", "criteria": [
-                crit("harmonie", "Harmonie", "einseitig", "ausbalanciert"),
-                crit("genuss", "Persönlicher Genussfaktor", "nicht mein Fall", "absoluter Favorit")]},
-        ],
+        "sections": COLA_SECTIONS,
         "items": [{"id": str(k), "name": v, "group": "Zero" if k in zero else "Zucker"} for k, v in sorted(names.items())],
         "flags": [{"key": "served", "label": "Selbst eingeschenkt", "hint": "Wer eingeschenkt hat, kannte die Cola."}],
         "awards": [
@@ -122,28 +100,7 @@ def water(path, aliases=None):
         "ranking": "personal_enjoyment",
         "tiebreak": "harmony",
         "group_label": "Mineral-Schlacht",
-        "sections": [
-            {"title": "Das Auge", "criteria": [
-                crit("clarity", "Klarheit", "Trüb", "Kristallklar"),
-                crit("color", "Farbe", "Farblos", "Getönt")]},
-            {"title": "Die Nase", "criteria": [
-                crit("odor", "Geruch", "Keiner, neutral", "Stark, erdig, metallisch")]},
-            {"title": "Das Mundgefühl", "criteria": [
-                crit("carbonation", "Kohlensäure", "Still", "Stark sprudelnd"),
-                crit("temperature", "Temperatur", "Eiskalt", "Zimmerwarm"),
-                crit("body", "Körper", "Dünn, leicht", "Schwer, seidig")]},
-            {"title": "Der Gaumen", "criteria": [
-                crit("mineral_intensity", "Mineralität", "Kaum", "Intensiv"),
-                crit("sweetness", "Süße", "Trocken", "Süß"),
-                crit("bitterness", "Bitterkeit", "Keine", "Scharf, bitter"),
-                crit("salinity", "Salzigkeit", "Frisch", "Salzig, brackig"),
-                crit("ph_sensation", "pH-Gefühl", "Sauer, scharf", "Basisch, weich")]},
-            {"title": "Der Abgang", "criteria": [
-                crit("duration", "Nachhall", "Kurz, sauber", "Lang anhaltend")]},
-            {"title": "Gesamtbewertung", "criteria": [
-                crit("harmony", "Harmonie", "Unausgewogen", "Perfekt ausbalanciert"),
-                crit("personal_enjoyment", "Persönlicher Genuss", "Nicht mein Glas", "Absoluter Favorit")]},
-        ],
+        "sections": WATER_SECTIONS,
         "items": [{"id": ids[n], "name": n, "group": "Mineralreich" if mineral[n] >= threshold else "Mineralarm"} for n in names],
         "awards": [
             {"title": "Die Salzmine", "line": "Salziger als der Wortschatz eines Seemanns.", "terms": [{"key": "salinity"}], "best": "max"},
